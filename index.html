@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🏆 Tips La Liga</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">Transporte discrecional</p>
+      <h1>🏆 Tips La Liga</h1>
+    </div>
+    <div id="userBox" class="user-box hidden">
+      <span id="userNameLabel"></span>
+      <button id="logoutBtn" class="btn ghost">Salir</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <section id="configWarning" class="notice hidden">
+      <strong>Falta configurar Supabase.</strong>
+      Abre <code>app.js</code> y sustituye <code>SUPABASE_URL</code> y <code>SUPABASE_ANON_KEY</code> por los datos de tu proyecto.
+    </section>
+
+    <section id="authSection" class="card auth-card">
+      <div class="auth-tabs">
+        <button id="showLoginBtn" class="tab active">Iniciar sesión</button>
+        <button id="showRegisterBtn" class="tab">Registrarse</button>
+      </div>
+
+      <form id="loginForm" class="form" aria-label="Iniciar sesión">
+        <h2>Entrar</h2>
+        <label for="loginEmail">Email</label>
+        <input id="loginEmail" type="email" required placeholder="tu@email.com" />
+
+        <label for="loginPassword">Contraseña</label>
+        <input id="loginPassword" type="password" required placeholder="••••••••" />
+
+        <button class="btn primary" type="submit">Entrar a la liga</button>
+      </form>
+
+      <form id="registerForm" class="form hidden" aria-label="Crear cuenta">
+        <h2>Crear cuenta</h2>
+        <label for="registerName">Nombre público</label>
+        <input id="registerName" type="text" required maxlength="40" placeholder="Ej. Marc, Laura, Lluís..." />
+
+        <label for="registerPassword">Contraseña</label>
+        <input id="registerEmail" type="email" required placeholder="tu@email.com" />
+
+        <label for="registerPassword">Contraseña</label>
+        <input id="registerPassword" type="password" required minlength="6" placeholder="Mínimo 6 caracteres" />
+
+        <button class="btn primary" type="submit">Crear cuenta</button>
+        <p class="help">El email no se mostrará en el ranking. Solo se verá tu nombre público.</p>
+      </form>
+    </section>
+
+    <section id="appSection" class="hidden">
+      <div class="grid two-cols">
+        <article class="card">
+          <h2>➕ Añadir propina</h2>
+          <form id="tipForm" class="form compact" aria-label="Añadir propina">
+            <label for="tipForm">Cantidad</label>
+            <input id="tipAmount" type="number" min="0.01" step="0.01" required placeholder="Ej. 10,50" />
+
+            <label for="tipCurrency">Moneda</label>
+            <select id="tipCurrency" required>
+              <option value="EUR">EUR €</option>
+              <option value="USD">USD $</option>
+            </select>
+
+            <label for="tipComment">Comentario opcional</label>
+            <input id="tipComment" type="text" maxlength="120" placeholder="Ej. Aeropuerto, hotel, cliente americano..." />
+
+            <button class="btn primary" type="submit">Guardar propina</button>
+          </form>
+          <p id="rateInfo" class="help"></p>
+        </article>
+
+        <article class="card month-card">
+          <h2>📅 Mes del ranking</h2>
+          <label for="monthPicker">Ver ranking de</label>
+          <input id="monthPicker" type="month" />
+          <button id="refreshBtn" class="btn ghost" type="button">Actualizar</button>
+          <button id="exportCsvBtn" class="btn ghost" type="button">Exportar CSV del mes</button>
+          <p class="help">El mes actual se muestra por defecto. Los meses anteriores quedan guardados.</p>
+        </article>
+      </div>
+
+      <section class="grid two-cols rankings">
+        <article class="card">
+          <div class="section-title">
+            <h2>🏁 Ranking mensual</h2>
+            <span id="monthlyTotalLabel" class="pill"></span>
+          </div>
+          <div id="monthlyRanking" class="ranking-list"></div>
+        </article>
+
+        <article class="card">
+          <div class="section-title">
+            <h2>🌍 Ranking global</h2>
+            <span id="globalTotalLabel" class="pill"></span>
+          </div>
+          <div id="globalRanking" class="ranking-list"></div>
+        </article>
+      </section>
+
+      <section class="card">
+        <div class="section-title">
+          <h2>📆 Historial diario del mes</h2>
+          <span class="pill">totales por día</span>
+        </div>
+        <div id="dailyHistory" class="daily-history"></div>
+      </section>
+
+      <div id="detailSection" class="card hidden">
+        <div class="section-title">
+          <h2 id="detailTitle">Detalle</h2>
+          <button id="closeDetailBtn" class="btn ghost" type="button">Cerrar</button>
+        </div>
+        <div id="tipsDetail" class="tips-detail"></div>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="editDialog" class="dialog">
+    <form id="editForm" class="form compact">
+      <h2>Editar propina</h2>
+      <input id="editTipId" type="hidden" />
+
+      <label for="editAmount">Cantidad</label>
+      <input id="editAmount" type="number" min="0.01" step="0.01" required />
+
+      <label for="editCurrency">Moneda</label>
+      <select id="editCurrency" required>
+        <option value="EUR">EUR €</option>
+        <option value="USD">USD $</option>
+      </select>
+
+      <label for="editComment">Comentario</label>
+      <input id="editComment" type="text" maxlength="120" />
+
+      <div class="dialog-actions">
+        <button id="cancelEditBtn" class="btn ghost" type="button">Cancelar</button>
+        <button class="btn primary" type="submit">Guardar cambios</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="app.js" defer></script>
+</body>
+</html>
