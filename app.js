@@ -430,6 +430,11 @@ async function addTip(event) {
 }
 
 function openEditDialog(tip) {
+  if (!tip || !canEditTip(tip)) {
+    toast("No tienes permiso para editar esta propina.");
+    return;
+  }
+
   els.editTipId.value = tip.id;
   els.editAmount.value = Number(tip.amount_original).toFixed(2);
   els.editCurrency.value = tip.currency;
@@ -441,6 +446,12 @@ async function saveEdit(event) {
   event.preventDefault();
 
   const id = els.editTipId.value;
+  const tip = allTips.find((item) => item.id === id);
+  if (!tip || !canEditTip(tip)) {
+    toast("No tienes permiso para editar esta propina.");
+    return;
+  }
+
   const amount = Number(els.editAmount.value);
   const currency = els.editCurrency.value;
   const comment = els.editComment.value.trim();
@@ -475,6 +486,12 @@ async function saveEdit(event) {
 }
 
 async function deleteTip(id) {
+  const tip = allTips.find((item) => item.id === id);
+  if (!tip || !canEditTip(tip)) {
+    toast("No tienes permiso para borrar esta propina.");
+    return;
+  }
+
   const ok = confirm("¿Seguro que quieres borrar esta propina?");
   if (!ok) return;
 
