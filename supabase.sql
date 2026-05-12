@@ -171,3 +171,176 @@ GRANT SELECT ON public.profiles TO anon, authenticated;
 GRANT INSERT, UPDATE ON public.profiles TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.tips TO authenticated;
 GRANT EXECUTE ON FUNCTION public.is_admin() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.is_admin() TO anon;
+
+-- ============================================================
+-- Sprint 2B: Perfiles de pago de conductores
+-- ============================================================
+
+-- -----------------------------
+-- Tabla driver_payment_profiles
+-- stripe_account_id NUNCA debe exponerse en vistas públicas ni
+-- devolverse al frontend. Solo Edge Functions con service_role
+-- pueden leerlo o escribirlo.
+-- onboarding_url NO se persiste aquí: se genera bajo demanda
+-- mediante Edge Function y expira; no tiene sentido almacenarlo.
+-- -----------------------------
+create table if not exists public.driver_payment_profiles (
+  id                uuid        primary key default gen_random_uuid(),
+  driver_id         uuid        not null unique references auth.users(id) on delete cascade,
+  display_name      text        not null,
+  vehicle_info      text,
+  route_info        text,
+  stripe_account_id text,
+  stripe_status     text        not null default 'not_connected',
+  payouts_enabled   boolean     not null default false,
+  charges_enabled   boolean     not null default false,
+  tip_link_slug     text        unique,
+  public_url        text,
+  is_active         boolean     not null default true,
+  is_visible        boolean     not null default true,
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now()
+);
+
+create index if not exists driver_payment_profiles_driver_id_idx
+  on public.driver_payment_profiles(driver_id);
+
+drop trigger if exists driver_payment_profiles_set_updated_at
+  on public.driver_payment_profiles;
+create trigger driver_payment_profiles_set_updated_at
+  before update on public.driver_payment_profiles
+  for each row execute function public.set_updated_at();
+
+-- -----------------------------
+-- Vista pública segura
+-- security_invoker = false (default): la vista corre como su
+-- owner (postgres/superuser), que bypassa RLS en la tabla.
+-- El filtro WHERE y la lista de columnas son la barrera de
+-- seguridad: stripe_account_id y driver_id nunca se exponen.
+-- -----------------------------
+drop view if exists public.public_driver_profiles;
+create view public.public_driver_profiles
+  with (security_invoker = false)
+as
+  select
+    id,
+    display_name,
+    vehicle_info,
+    route_info,
+    tip_link_slug,
+    public_url,
+    is_active,
+    is_visible
+  from public.driver_payment_profiles
+  where is_active  = true
+    and is_visible = true;
+
+-- -----------------------------
+-- RLS: driver_payment_profiles
+-- -----------------------------
+alter table public.driver_payment_profiles enable row level security;
+
+drop policy if exists "dpp_conductor_read_own"  on public.driver_payment_profiles;
+drop policy if exists "dpp_admin_read_all"       on public.driver_payment_profiles;
+drop policy if exists "dpp_conductor_insert_own" on public.driver_payment_profiles;
+drop policy if exists "dpp_conductor_update_own" on public.driver_payment_profiles;
+drop policy if exists "dpp_admin_update_all"     on public.driver_payment_profiles;
+drop policy if exists "dpp_admin_delete_all"     on public.driver_payment_profiles;
+
+-- Conductor: leer su propio perfil completo (incluye stripe_status)
+create policy "dpp_conductor_read_own"
+  on public.driver_payment_profiles
+  for select
+  to authenticated
+  using (driver_id = auth.uid());
+
+-- Admin: leer todos los perfiles (incluye stripe_account_id)
+create policy "dpp_admin_read_all"
+  on public.driver_payment_profiles
+  for select
+  to authenticated
+  using (public.is_admin());
+
+-- Conductor: crear su propio perfil (driver_id debe ser el suyo)
+create policy "dpp_conductor_insert_own"
+  on public.driver_payment_profiles
+  for insert
+  to authenticated
+  with check (driver_id = auth.uid());
+
+-- Conductor: actualizar campos propios
+-- Los campos Stripe solo los actualiza la Edge Function con service_role
+create policy "dpp_conductor_update_own"
+  on public.driver_payment_profiles
+  for update
+  to authenticated
+  using  (driver_id = auth.uid())
+  with check (driver_id = auth.uid());
+
+-- Admin: actualizar cualquier perfil
+create policy "dpp_admin_update_all"
+  on public.driver_payment_profiles
+  for update
+  to authenticated
+  using (public.is_admin());
+
+-- Admin: único rol que puede borrar perfiles
+create policy "dpp_admin_delete_all"
+  on public.driver_payment_profiles
+  for delete
+  to authenticated
+  using (public.is_admin());
+
+-- -----------------------------
+-- Protección de campos Stripe (RIESGO-01)
+-- Un conductor autenticado puede actualizar solo:
+--   display_name, vehicle_info, route_info, tip_link_slug, public_url, is_visible
+-- Campos protegidos (solo Edge Functions con service_role o admin):
+--   stripe_account_id, stripe_status, payouts_enabled, charges_enabled, is_active
+-- El trigger se salta para 'postgres' y 'service_role' (Edge Functions Sprint 2C).
+-- -----------------------------
+create or replace function public.guard_stripe_fields()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  -- Superusuario y service_role tienen acceso total (Edge Functions en Sprint 2C)
+  if current_role in ('postgres', 'service_role') then
+    return new;
+  end if;
+
+  -- Admin tiene acceso total
+  if public.is_admin() then
+    return new;
+  end if;
+
+  -- Bloquear cambios en campos sensibles para cualquier otro usuario autenticado
+  if (new.stripe_account_id is distinct from old.stripe_account_id)
+  or (new.stripe_status    is distinct from old.stripe_status)
+  or (new.payouts_enabled  is distinct from old.payouts_enabled)
+  or (new.charges_enabled  is distinct from old.charges_enabled)
+  or (new.is_active        is distinct from old.is_active)
+  then
+    raise exception
+      'No autorizado: stripe_account_id, stripe_status, payouts_enabled, '
+      'charges_enabled e is_active solo pueden actualizarse mediante '
+      'Edge Functions con service_role.';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists guard_stripe_fields_trigger on public.driver_payment_profiles;
+create trigger guard_stripe_fields_trigger
+  before update on public.driver_payment_profiles
+  for each row execute function public.guard_stripe_fields();
+
+-- -----------------------------
+-- Grants
+-- -----------------------------
+grant select on public.public_driver_profiles to anon, authenticated;
+grant select, insert, update on public.driver_payment_profiles to authenticated;
