@@ -1,0 +1,6 @@
+supabase/.temp/
+
+.env
+.env.local
+supabase/.env
+supabase/functions/.env
