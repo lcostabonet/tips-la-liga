@@ -408,3 +408,230 @@ select:focus {
     justify-content: flex-start;
   }
 }
+
+/* ===== Sprint 2A: Dar propina ===== */
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.tip-tab {
+  background: var(--gold);
+  color: var(--primary);
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.tip-tab:hover {
+  background: #e8b830;
+}
+
+.tip-driver-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.tip-driver-header h2 {
+  margin: 0;
+  flex: 1;
+}
+
+.demo-badge {
+  background: #fff4d2;
+  color: #7a5200;
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.driver-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.driver-card {
+  background: var(--card);
+  border: 2px solid var(--line);
+  border-radius: 24px;
+  padding: 24px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+  box-shadow: var(--shadow);
+  transition: transform 0.15s, border-color 0.15s;
+}
+
+.driver-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--gold);
+}
+
+.driver-emoji {
+  font-size: 52px;
+  line-height: 1;
+}
+
+.driver-card strong {
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.driver-card .btn {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.driver-pay-card {
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.driver-pay-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 16px 0 20px;
+}
+
+.driver-emoji-lg {
+  font-size: 56px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.driver-pay-name {
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.qr-box {
+  display: flex;
+  justify-content: center;
+  margin: 20px 0 12px;
+}
+
+.qr-box img {
+  border-radius: 16px;
+  border: 3px solid var(--line);
+  background: white;
+}
+
+.qr-hint {
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.tip-chips {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.chip {
+  flex: 1;
+  min-width: 60px;
+  border: 2px solid var(--line);
+  background: #fffaf0;
+  border-radius: 999px;
+  padding: 12px 8px;
+  font-weight: 800;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.chip:hover {
+  border-color: var(--gold);
+}
+
+.chip.selected {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: var(--primary);
+}
+
+.custom-amount {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 13px 14px;
+  background: #fffdf9;
+  color: var(--text);
+  margin-bottom: 14px;
+}
+
+.custom-amount:focus {
+  outline: 2px solid rgba(244, 197, 66, 0.7);
+  border-color: var(--gold);
+}
+
+.pay-btn {
+  width: 100%;
+  padding: 16px;
+  font-size: 17px;
+  margin-bottom: 10px;
+}
+
+.pay-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.demo-notice {
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0;
+}
+
+.pay-confirm {
+  margin-top: 20px;
+  background: #edfaf3;
+  border: 1px solid #a3d9bc;
+  border-radius: 20px;
+  padding: 24px;
+  text-align: center;
+  display: grid;
+  gap: 10px;
+}
+
+.confirm-icon {
+  font-size: 40px;
+}
+
+.confirm-msg {
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.pay-confirm .btn {
+  justify-self: center;
+}
+
+@media (max-width: 800px) {
+  .topbar-right {
+    width: 100%;
+  }
+
+  .driver-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tip-driver-header {
+    gap: 8px;
+  }
+}

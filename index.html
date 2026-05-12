@@ -12,9 +12,12 @@
       <p class="eyebrow">Transporte discrecional</p>
       <h1>🏆 Tips La Liga</h1>
     </div>
-    <div id="userBox" class="user-box hidden">
-      <span id="userNameLabel"></span>
-      <button id="logoutBtn" class="btn ghost">Salir</button>
+    <div class="topbar-right">
+      <button id="darPropinaBtn" class="btn tip-tab" type="button">💸 Dar propina</button>
+      <div id="userBox" class="user-box hidden">
+        <span id="userNameLabel"></span>
+        <button id="logoutBtn" class="btn ghost">Salir</button>
+      </div>
     </div>
   </header>
 
@@ -121,6 +124,58 @@
           <button id="closeDetailBtn" class="btn ghost" type="button">Cerrar</button>
         </div>
         <div id="tipsDetail" class="tips-detail"></div>
+      </div>
+    </section>
+
+    <section id="tipDriverSection" class="hidden">
+      <div class="tip-driver-header">
+        <button id="backToAppBtn" class="btn ghost" type="button">← Volver</button>
+        <h2>Elige un conductor</h2>
+        <span class="demo-badge">🧪 Demo</span>
+      </div>
+
+      <div id="driverList" class="driver-grid"></div>
+
+      <div id="driverPayView" class="card driver-pay-card hidden">
+        <button id="backToDriversBtn" class="btn ghost" type="button">← Conductores</button>
+
+        <div class="driver-pay-header">
+          <span id="payDriverEmoji" class="driver-emoji-lg" aria-hidden="true"></span>
+          <div>
+            <strong id="payDriverName" class="driver-pay-name"></strong>
+            <p id="payDriverBio" class="help"></p>
+          </div>
+        </div>
+
+        <div class="qr-box">
+          <img id="driverQr" src="" alt="QR de pago del conductor" width="180" height="180" loading="lazy" />
+        </div>
+
+        <p class="help qr-hint">Escanea el QR o elige un importe</p>
+
+        <div id="tipChips" class="tip-chips"></div>
+
+        <input
+          type="number"
+          id="customAmount"
+          class="custom-amount"
+          placeholder="Otro importe (€)"
+          min="0.50"
+          step="0.50"
+        />
+
+        <button id="payTipBtn" class="btn primary pay-btn" type="button" disabled>
+          Selecciona un importe
+        </button>
+
+        <p class="demo-notice">🧪 Modo demo — el pago no es real</p>
+
+        <div id="payConfirm" class="pay-confirm hidden">
+          <div class="confirm-icon">✅</div>
+          <strong id="confirmMsg" class="confirm-msg"></strong>
+          <p class="help">¡Gracias por tu generosidad! 🙌</p>
+          <button id="newTipBtn" class="btn ghost" type="button">Dar otra propina</button>
+        </div>
       </div>
     </section>
   </main>

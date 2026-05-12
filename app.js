@@ -19,6 +19,8 @@ let currentUser = null;
 let currentProfile = null;
 let allTips = [];
 let selectedDetail = null;
+let selectedDriver = null;
+let selectedTipAmount = 0;
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -58,6 +60,22 @@ const els = {
   editComment: $("#editComment"),
   cancelEditBtn: $("#cancelEditBtn"),
   toast: $("#toast"),
+  darPropinaBtn: $("#darPropinaBtn"),
+  tipDriverSection: $("#tipDriverSection"),
+  driverList: $("#driverList"),
+  driverPayView: $("#driverPayView"),
+  backToAppBtn: $("#backToAppBtn"),
+  backToDriversBtn: $("#backToDriversBtn"),
+  payDriverEmoji: $("#payDriverEmoji"),
+  payDriverName: $("#payDriverName"),
+  payDriverBio: $("#payDriverBio"),
+  driverQr: $("#driverQr"),
+  tipChips: $("#tipChips"),
+  customAmount: $("#customAmount"),
+  payTipBtn: $("#payTipBtn"),
+  payConfirm: $("#payConfirm"),
+  confirmMsg: $("#confirmMsg"),
+  newTipBtn: $("#newTipBtn"),
 };
 
 function toast(message) {
@@ -557,6 +575,7 @@ function setAuthMode(mode) {
 }
 
 async function onAuthStateChanged(session) {
+  els.tipDriverSection.classList.add("hidden");
   currentUser = session?.user || null;
 
   if (!currentUser) {
@@ -610,6 +629,130 @@ function setupEvents() {
       deleteTip(deleteId);
     }
   });
+
+  els.darPropinaBtn.addEventListener("click", showTipSection);
+  els.backToAppBtn.addEventListener("click", hideTipSection);
+  els.backToDriversBtn.addEventListener("click", renderDriverList);
+  els.payTipBtn.addEventListener("click", handleTipPayment);
+  els.newTipBtn.addEventListener("click", () => {
+    selectedTipAmount = null;
+    els.customAmount.value = "";
+    document.querySelectorAll(".chip").forEach((c) => c.classList.remove("selected"));
+    els.payTipBtn.classList.remove("hidden");
+    renderDriverList();
+  });
+  els.customAmount.addEventListener("input", () => {
+    const val = parseFloat(els.customAmount.value);
+    document.querySelectorAll(".chip").forEach((c) => c.classList.remove("selected"));
+    selectedTipAmount = val > 0 ? val : 0;
+    updatePayButton();
+  });
+}
+
+const MOCK_DRIVERS = [
+  { id: 1, name: "Marta G.",  emoji: "🚌", bio: "10 años en ruta",    slug: "marta-g"  },
+  { id: 2, name: "Jordi P.",  emoji: "🚐", bio: "Siempre puntual",    slug: "jordi-p"  },
+  { id: 3, name: "Sandra R.", emoji: "🚍", bio: "La favorita",        slug: "sandra-r" },
+  { id: 4, name: "Toni V.",   emoji: "🚎", bio: "El más simpático",   slug: "toni-v"   },
+];
+
+const TIP_CHIP_AMOUNTS = [1, 2, 5, 10];
+
+function showTipSection() {
+  els.authSection.classList.add("hidden");
+  els.appSection.classList.add("hidden");
+  els.tipDriverSection.classList.remove("hidden");
+  renderDriverList();
+}
+
+function hideTipSection() {
+  els.tipDriverSection.classList.add("hidden");
+  els.driverPayView.classList.add("hidden");
+  els.driverList.classList.remove("hidden");
+  selectedDriver = null;
+  selectedTipAmount = 0;
+
+  if (currentUser) {
+    els.appSection.classList.remove("hidden");
+  } else {
+    els.authSection.classList.remove("hidden");
+  }
+}
+
+function renderDriverList() {
+  els.driverList.innerHTML = "";
+  els.driverPayView.classList.add("hidden");
+  els.driverList.classList.remove("hidden");
+
+  for (const driver of MOCK_DRIVERS) {
+    const card = document.createElement("div");
+    card.className = "driver-card";
+    card.innerHTML = `
+      <span class="driver-emoji" aria-hidden="true">${driver.emoji}</span>
+      <strong>${escapeHtml(driver.name)}</strong>
+      <p class="help">${escapeHtml(driver.bio)}</p>
+      <button class="btn primary" type="button">Dar propina</button>
+    `;
+    card.querySelector("button").addEventListener("click", () => showDriverPayView(driver));
+    els.driverList.appendChild(card);
+  }
+}
+
+function showDriverPayView(driver) {
+  selectedDriver = driver;
+  selectedTipAmount = 0;
+
+  els.driverList.classList.add("hidden");
+  els.driverPayView.classList.remove("hidden");
+  els.payConfirm.classList.add("hidden");
+
+  els.payDriverEmoji.textContent = driver.emoji;
+  els.payDriverName.textContent = driver.name;
+  els.payDriverBio.textContent = driver.bio;
+  els.driverQr.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=tips-la-liga-demo-${driver.slug}`;
+  els.customAmount.value = "";
+
+  els.tipChips.innerHTML = "";
+  for (const amount of TIP_CHIP_AMOUNTS) {
+    const btn = document.createElement("button");
+    btn.className = "chip";
+    btn.type = "button";
+    btn.dataset.amount = amount;
+    btn.textContent = `${amount} €`;
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".chip").forEach((c) => c.classList.remove("selected"));
+      btn.classList.add("selected");
+      els.customAmount.value = "";
+      selectedTipAmount = amount;
+      updatePayButton();
+    });
+    els.tipChips.appendChild(btn);
+  }
+
+  updatePayButton();
+}
+
+function updatePayButton() {
+  if (selectedTipAmount > 0) {
+    els.payTipBtn.disabled = false;
+    els.payTipBtn.textContent = `Pagar ${selectedTipAmount.toFixed(2).replace(".", ",")} €`;
+  } else {
+    els.payTipBtn.disabled = true;
+    els.payTipBtn.textContent = "Selecciona un importe";
+  }
+}
+
+function handleTipPayment() {
+  if (!selectedDriver || selectedTipAmount <= 0) return;
+
+  els.payTipBtn.disabled = true;
+  els.payTipBtn.textContent = "Procesando...";
+
+  setTimeout(() => {
+    els.confirmMsg.textContent = `¡Propina de ${selectedTipAmount.toFixed(2).replace(".", ",")} € enviada a ${selectedDriver.name}!`;
+    els.payConfirm.classList.remove("hidden");
+    els.payTipBtn.classList.add("hidden");
+  }, 1500);
 }
 
 async function init() {
