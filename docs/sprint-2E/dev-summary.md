@@ -75,6 +75,42 @@ MOCK_DRIVERS tenían slug, por lo que mostraban "Modo test" incorrectamente. Aho
 
 ## Archivos NO modificados
 - `supabase.sql` ✅
-- Edge Functions ✅
 - `index.html` ✅
 - `style.css` ✅
+
+---
+
+## Corrección adicional: import de Stripe incompatible con Supabase Edge Runtime
+
+**Error observado en producción:**
+```
+Deno.core.runMicrotasks() is not supported in this environment
+```
+
+**Causa:** `supabase/functions/_shared/stripe.ts` importaba Stripe con `?target=deno`:
+```typescript
+import Stripe from 'https://esm.sh/stripe@14?target=deno';
+```
+El target `deno` genera un bundle que incluye polyfills de Node (como `Deno.core.runMicrotasks`) que solo existen en el runtime estándar de Deno, no en Supabase Edge Runtime (Deno Deploy).
+
+**Fix:**
+```typescript
+// Antes:
+import Stripe from 'https://esm.sh/stripe@14?target=deno';
+
+// Después:
+import Stripe from 'https://esm.sh/stripe@14?target=denonext';
+```
+
+`?target=denonext` genera un bundle compatible con Deno Deploy y el Edge Runtime de Supabase. Es el target correcto para todas las Edge Functions de Supabase.
+
+**Archivo modificado:** `supabase/functions/_shared/stripe.ts` — solo línea 1.
+
+**Funciones afectadas (se corrigen automáticamente al importar el módulo compartido):**
+- `create-driver-connect-account`
+- `refresh-driver-onboarding-link`
+- `create-driver-payment-link`
+
+**Requiere redeploy de las 3 funciones que usan Stripe.**
+
+**Las importaciones de `@supabase/supabase-js@2` sin target no causan este problema** — esa librería no arrastra polyfills de Node internos.
