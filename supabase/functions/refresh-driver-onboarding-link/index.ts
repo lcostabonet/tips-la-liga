@@ -18,10 +18,16 @@ Deno.serve(async (req) => {
     const { data: { user }, error: authError } = await userClient.auth.getUser();
     if (authError || !user) return errorResponse(req, 401, 'Token inválido');
 
+    // Admin puede llamar esta función en nombre de un conductor pasando driver_id en el body
+    const body = await req.json().catch(() => ({}));
+    const adminEmail = Deno.env.get('ADMIN_EMAIL') ?? '';
+    const isAdminUser = adminEmail && user.email?.toLowerCase() === adminEmail.toLowerCase();
+    const targetDriverId: string = (isAdminUser && body.driver_id) ? body.driver_id : user.id;
+
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('driver_payment_profiles')
       .select('stripe_account_id')
-      .eq('driver_id', user.id)
+      .eq('driver_id', targetDriverId)
       .single();
 
     if (profileError || !profile) return errorResponse(req, 404, 'Perfil de conductor no encontrado');
@@ -42,7 +48,7 @@ Deno.serve(async (req) => {
         payouts_enabled: account.payouts_enabled,
         stripe_status: stripeStatus,
       })
-      .eq('driver_id', user.id);
+      .eq('driver_id', targetDriverId);
 
     if (updateError) {
       console.error('[refresh-driver-onboarding-link] DB update failed:', updateError.message);

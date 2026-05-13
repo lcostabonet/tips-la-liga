@@ -6,6 +6,7 @@
 const SUPABASE_URL = "https://uwnaioghebzrnbsxbouu.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_QSaYDWLGVFM1iTUr5DwqxA_ycnwcCLQ";
 const ADMIN_EMAIL = "lluis15basket@hotmail.es";
+const FUNCTIONS_URL = `${SUPABASE_URL}/functions/v1`;
 
 const isConfigured =
   SUPABASE_URL.startsWith("https://") &&
@@ -21,6 +22,7 @@ let allTips = [];
 let selectedDetail = null;
 let selectedDriver = null;
 let selectedTipAmount = 0;
+let adminDrivers = [];
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -76,6 +78,18 @@ const els = {
   payConfirm: $("#payConfirm"),
   confirmMsg: $("#confirmMsg"),
   newTipBtn: $("#newTipBtn"),
+  adminBtn: $("#adminBtn"),
+  adminDriversSection: $("#adminDriversSection"),
+  backFromAdminBtn: $("#backFromAdminBtn"),
+  driverProfilesList: $("#driverProfilesList"),
+  editDriverDialog: $("#editDriverDialog"),
+  editDriverForm: $("#editDriverForm"),
+  editDriverId: $("#editDriverId"),
+  editDriverName: $("#editDriverName"),
+  editDriverVehicle: $("#editDriverVehicle"),
+  editDriverRoute: $("#editDriverRoute"),
+  editDriverVisible: $("#editDriverVisible"),
+  cancelEditDriverBtn: $("#cancelEditDriverBtn"),
 };
 
 function toast(message) {
@@ -576,14 +590,17 @@ function setAuthMode(mode) {
 
 async function onAuthStateChanged(session) {
   els.tipDriverSection.classList.add("hidden");
+  els.adminDriversSection.classList.add("hidden");
   currentUser = session?.user || null;
 
   if (!currentUser) {
     currentProfile = null;
     allTips = [];
+    adminDrivers = [];
     els.authSection.classList.remove("hidden");
     els.appSection.classList.add("hidden");
     els.userBox.classList.add("hidden");
+    els.adminBtn.classList.add("hidden");
     return;
   }
 
@@ -593,6 +610,7 @@ async function onAuthStateChanged(session) {
     els.userBox.classList.remove("hidden");
     els.authSection.classList.add("hidden");
     els.appSection.classList.remove("hidden");
+    if (isAdmin()) els.adminBtn.classList.remove("hidden");
     await loadTips();
   } catch (error) {
     toast(error.message || "Error cargando datos.");
@@ -647,6 +665,11 @@ function setupEvents() {
     selectedTipAmount = val > 0 ? val : 0;
     updatePayButton();
   });
+
+  els.adminBtn.addEventListener("click", showAdminSection);
+  els.backFromAdminBtn.addEventListener("click", hideAdminSection);
+  els.editDriverForm.addEventListener("submit", saveEditDriver);
+  els.cancelEditDriverBtn.addEventListener("click", () => els.editDriverDialog.close());
 }
 
 const MOCK_DRIVERS = [
@@ -661,6 +684,7 @@ const TIP_CHIP_AMOUNTS = [1, 2, 5, 10];
 function showTipSection() {
   els.authSection.classList.add("hidden");
   els.appSection.classList.add("hidden");
+  els.adminDriversSection.classList.add("hidden");
   els.tipDriverSection.classList.remove("hidden");
   renderDriverList();
 }
@@ -679,21 +703,40 @@ function hideTipSection() {
   }
 }
 
-function renderDriverList() {
-  els.driverList.innerHTML = "";
+async function renderDriverList() {
+  els.driverList.innerHTML = "<p class='help' style='padding:16px'>Cargando conductores...</p>";
   els.driverPayView.classList.add("hidden");
   els.driverList.classList.remove("hidden");
 
-  for (const driver of MOCK_DRIVERS) {
+  const drivers = await loadPublicDrivers();
+  els.driverList.innerHTML = "";
+
+  if (!drivers.length) {
+    els.driverList.innerHTML = "<p class='help' style='padding:16px'>No hay conductores disponibles en este momento.</p>";
+    return;
+  }
+
+  for (const driver of drivers) {
+    const name = driver.display_name || driver.name || "Conductor";
+    const bio = [driver.vehicle_info, driver.route_info].filter(Boolean).join(" · ") || driver.bio || "";
     const card = document.createElement("div");
     card.className = "driver-card";
     card.innerHTML = `
-      <span class="driver-emoji" aria-hidden="true">${driver.emoji}</span>
-      <strong>${escapeHtml(driver.name)}</strong>
-      <p class="help">${escapeHtml(driver.bio)}</p>
+      <span class="driver-emoji" aria-hidden="true">${driver.emoji || "🚌"}</span>
+      <strong>${escapeHtml(name)}</strong>
+      <p class="help">${escapeHtml(bio)}</p>
       <button class="btn primary" type="button">Dar propina</button>
     `;
-    card.querySelector("button").addEventListener("click", () => showDriverPayView(driver));
+    const normalized = {
+      id: driver.id,
+      name,
+      bio,
+      emoji: driver.emoji || "🚌",
+      slug: driver.tip_link_slug || driver.slug || null,
+      tip_link_slug: driver.tip_link_slug || driver.slug || null,
+      public_url: driver.public_url || null,
+    };
+    card.querySelector("button").addEventListener("click", () => showDriverPayView(normalized));
     els.driverList.appendChild(card);
   }
 }
@@ -706,10 +749,19 @@ function showDriverPayView(driver) {
   els.driverPayView.classList.remove("hidden");
   els.payConfirm.classList.add("hidden");
 
-  els.payDriverEmoji.textContent = driver.emoji;
-  els.payDriverName.textContent = driver.name;
-  els.payDriverBio.textContent = driver.bio;
-  els.driverQr.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=tips-la-liga-demo-${driver.slug}`;
+  const driverName = driver.display_name || driver.name || "";
+  const driverBio = driver.bio || [driver.vehicle_info, driver.route_info].filter(Boolean).join(" · ") || "";
+  els.payDriverEmoji.textContent = driver.emoji || "🚌";
+  els.payDriverName.textContent = driverName;
+  els.payDriverBio.textContent = driverBio;
+  const qrData = driver.public_url || `tips-la-liga-demo-${driver.tip_link_slug || driver.slug || "demo"}`;
+  els.driverQr.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrData)}`;
+  const demoNoticeEl = els.driverPayView.querySelector(".demo-notice");
+  if (demoNoticeEl) {
+    demoNoticeEl.textContent = (driver.tip_link_slug || driver.slug)
+      ? "🧪 Modo test — el pago es de prueba con Stripe"
+      : "🧪 Modo demo — el pago no es real";
+  }
   els.customAmount.value = "";
 
   els.tipChips.innerHTML = "";
@@ -742,17 +794,238 @@ function updatePayButton() {
   }
 }
 
-function handleTipPayment() {
+async function handleTipPayment() {
   if (!selectedDriver || selectedTipAmount <= 0) return;
 
   els.payTipBtn.disabled = true;
   els.payTipBtn.textContent = "Procesando...";
 
+  const slug = selectedDriver.tip_link_slug || selectedDriver.slug;
+  if (slug && client) {
+    try {
+      const result = await callEdgeFunction(
+        "create-driver-payment-link",
+        { slug, amount: Number(Number(selectedTipAmount).toFixed(2)), currency: "eur" },
+        false,
+      );
+      if (result.session_url) {
+        window.open(result.session_url, "_blank");
+        updatePayButton();
+        return;
+      }
+    } catch (err) {
+      toast(err.message || "Error al crear el enlace de pago.");
+      updatePayButton();
+      return;
+    }
+  }
+
+  const driverName = selectedDriver.display_name || selectedDriver.name || "el conductor";
   setTimeout(() => {
-    els.confirmMsg.textContent = `¡Propina de ${selectedTipAmount.toFixed(2).replace(".", ",")} € enviada a ${selectedDriver.name}!`;
+    els.confirmMsg.textContent = `¡Propina de ${Number(selectedTipAmount).toFixed(2).replace(".", ",")} € enviada a ${driverName}!`;
     els.payConfirm.classList.remove("hidden");
     els.payTipBtn.classList.add("hidden");
   }, 1500);
+}
+
+async function callEdgeFunction(name, body = {}, requiresAuth = true) {
+  if (requiresAuth) {
+    const { data, error } = await client.functions.invoke(name, { body });
+    if (error) throw new Error(error.message ?? "Error en Edge Function");
+    return data;
+  }
+  // fetch directo para endpoints públicos (sin auth): client.functions.invoke()
+  // siempre inyecta el token de sesión activa, lo que rompería la llamada anónima.
+  const res = await fetch(`${FUNCTIONS_URL}/${name}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error ?? `Error ${res.status}`);
+  return json;
+}
+
+async function loadPublicDrivers() {
+  if (!client) return MOCK_DRIVERS;
+  try {
+    const { data, error } = await client
+      .from("public_driver_profiles")
+      .select("id, display_name, vehicle_info, route_info, tip_link_slug, public_url")
+      .order("display_name");
+    if (error || !data || data.length === 0) return MOCK_DRIVERS;
+    return data;
+  } catch {
+    return MOCK_DRIVERS;
+  }
+}
+
+async function loadDriverProfiles() {
+  const { data, error } = await client
+    .from("driver_payment_profiles")
+    .select("id, driver_id, display_name, vehicle_info, route_info, stripe_status, charges_enabled, payouts_enabled, tip_link_slug, public_url, is_active, is_visible")
+    .order("display_name");
+  if (error) throw error;
+  adminDrivers = data || [];
+}
+
+function stripeStatusLabel(status) {
+  return { not_connected: "Sin conectar", pending: "Pendiente", restricted: "Restringida", active: "Activa ✓" }[status] ?? (status || "Sin conectar");
+}
+
+function renderDriverProfiles() {
+  const list = els.driverProfilesList;
+  list.innerHTML = "";
+
+  if (!adminDrivers.length) {
+    list.innerHTML = "<p class='help' style='padding:16px'>No hay perfiles de conductor. Insértalos desde el SQL Editor de Supabase.</p>";
+    return;
+  }
+
+  for (const driver of adminDrivers) {
+    const statusKey = driver.stripe_status || "not_connected";
+    const hasSlug = !!driver.tip_link_slug;
+    const canPay = hasSlug && !!driver.charges_enabled;
+    const qrUrl = driver.public_url
+      ? `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(driver.public_url)}`
+      : null;
+
+    const card = document.createElement("div");
+    card.className = "driver-profile-card";
+    card.dataset.driverId = driver.driver_id;
+
+    card.innerHTML = `
+      <div class="driver-profile-header">
+        <div>
+          <strong>${escapeHtml(driver.display_name)}</strong>
+          <p class="help">${escapeHtml([driver.vehicle_info, driver.route_info].filter(Boolean).join(" · ") || "—")}</p>
+        </div>
+        <span class="stripe-badge stripe-${escapeHtml(statusKey)}">${escapeHtml(stripeStatusLabel(statusKey))}</span>
+      </div>
+      <div class="driver-stripe-flags">
+        <span>Cobros: <span class="${driver.charges_enabled ? "flag-ok" : "flag-no"}">${driver.charges_enabled ? "✓" : "✗"}</span></span>
+        <span>Pagos: <span class="${driver.payouts_enabled ? "flag-ok" : "flag-no"}">${driver.payouts_enabled ? "✓" : "✗"}</span></span>
+        <span>Visible: <span class="${driver.is_visible ? "flag-ok" : "flag-no"}">${driver.is_visible ? "✓" : "✗"}</span></span>
+      </div>
+      <div class="driver-actions">
+        <button class="btn ghost" data-action="onboarding" data-driver-id="${escapeHtml(driver.driver_id)}">Onboarding</button>
+        <button class="btn ghost" data-action="refresh" data-driver-id="${escapeHtml(driver.driver_id)}">Actualizar estado</button>
+        <button class="btn ghost" data-action="tiplink" data-driver-id="${escapeHtml(driver.driver_id)}">Generar QR</button>
+        <button class="btn ghost" data-action="testpay" data-slug="${escapeHtml(driver.tip_link_slug || "")}" ${!canPay ? "disabled" : ""} title="${!canPay ? "Completa el onboarding primero" : "Pago test de 1€"}">Test 1€</button>
+        <button class="btn ghost" data-action="edit" data-driver-id="${escapeHtml(driver.driver_id)}" data-display-name="${escapeHtml(driver.display_name)}" data-vehicle="${escapeHtml(driver.vehicle_info || "")}" data-route="${escapeHtml(driver.route_info || "")}" data-visible="${driver.is_visible ? "1" : "0"}">Editar</button>
+      </div>
+      <div class="driver-qr-box${qrUrl ? "" : " hidden"}">
+        ${qrUrl ? `<img src="${escapeHtml(qrUrl)}" alt="QR de ${escapeHtml(driver.display_name)}" width="180" height="180" loading="lazy" />` : ""}
+        ${driver.public_url ? `<a href="${escapeHtml(driver.public_url)}" target="_blank" rel="noopener">${escapeHtml(driver.public_url)}</a>` : ""}
+      </div>
+    `;
+
+    card.addEventListener("click", async (event) => {
+      const btn = event.target.closest("[data-action]");
+      if (!btn || btn.disabled) return;
+      const action = btn.dataset.action;
+      const dId = btn.dataset.driverId;
+
+      if (action === "onboarding") await adminOnboarding(dId);
+      if (action === "refresh")    await adminRefresh(dId);
+      if (action === "tiplink")    await adminGenerateTipLink(dId);
+      if (action === "testpay")    await adminTestPay(btn.dataset.slug);
+      if (action === "edit")       openEditDriverDialog(btn.dataset);
+    });
+
+    list.appendChild(card);
+  }
+}
+
+async function adminOnboarding(driverId) {
+  try {
+    toast("Iniciando onboarding...");
+    const result = await callEdgeFunction("create-driver-connect-account", { driver_id: driverId });
+    if (result.onboarding_url) window.open(result.onboarding_url, "_blank");
+    toast("Enlace de onboarding abierto.");
+  } catch (err) {
+    toast(err.message || "Error al iniciar onboarding.");
+  }
+}
+
+async function adminRefresh(driverId) {
+  try {
+    toast("Actualizando estado Stripe...");
+    await callEdgeFunction("refresh-driver-onboarding-link", { driver_id: driverId });
+    await loadDriverProfiles();
+    renderDriverProfiles();
+    toast("Estado Stripe actualizado.");
+  } catch (err) {
+    toast(err.message || "Error al actualizar estado.");
+  }
+}
+
+async function adminGenerateTipLink(driverId) {
+  try {
+    toast("Generando QR...");
+    await callEdgeFunction("generate-tip-link", { driver_id: driverId });
+    await loadDriverProfiles();
+    renderDriverProfiles();
+    toast("QR generado.");
+  } catch (err) {
+    toast(err.message || "Error al generar QR.");
+  }
+}
+
+async function adminTestPay(slug) {
+  if (!slug) { toast("Este conductor no tiene link de pago."); return; }
+  try {
+    toast("Creando sesión de pago test...");
+    const result = await callEdgeFunction("create-driver-payment-link", { slug, amount: 1.00, currency: "eur" }, false);
+    if (result.session_url) window.open(result.session_url, "_blank");
+  } catch (err) {
+    toast(err.message || "Error al crear pago test.");
+  }
+}
+
+function openEditDriverDialog(dataset) {
+  els.editDriverId.value = dataset.driverId;
+  els.editDriverName.value = dataset.displayName || "";
+  els.editDriverVehicle.value = dataset.vehicle || "";
+  els.editDriverRoute.value = dataset.route || "";
+  els.editDriverVisible.checked = dataset.visible === "1";
+  els.editDriverDialog.showModal();
+}
+
+async function saveEditDriver(event) {
+  event.preventDefault();
+  const driverId = els.editDriverId.value;
+  const updates = {
+    display_name: els.editDriverName.value.trim(),
+    vehicle_info: els.editDriverVehicle.value.trim() || null,
+    route_info: els.editDriverRoute.value.trim() || null,
+    is_visible: els.editDriverVisible.checked,
+  };
+  if (!updates.display_name) { toast("El nombre es obligatorio."); return; }
+  try {
+    const { error } = await client.from("driver_payment_profiles").update(updates).eq("driver_id", driverId);
+    if (error) throw error;
+    els.editDriverDialog.close();
+    await loadDriverProfiles();
+    renderDriverProfiles();
+    toast("Perfil actualizado.");
+  } catch (err) {
+    toast(err.message || "Error al guardar.");
+  }
+}
+
+function showAdminSection() {
+  els.authSection.classList.add("hidden");
+  els.appSection.classList.add("hidden");
+  els.tipDriverSection.classList.add("hidden");
+  els.adminDriversSection.classList.remove("hidden");
+  loadDriverProfiles().then(renderDriverProfiles).catch((err) => toast(err.message || "Error cargando conductores."));
+}
+
+function hideAdminSection() {
+  els.adminDriversSection.classList.add("hidden");
+  if (currentUser) els.appSection.classList.remove("hidden");
+  else els.authSection.classList.remove("hidden");
 }
 
 async function init() {

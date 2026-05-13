@@ -635,3 +635,133 @@ select:focus {
     gap: 8px;
   }
 }
+
+/* ===== Sprint 2D: Panel admin de conductores ===== */
+
+.admin-btn {
+  white-space: nowrap;
+}
+
+.admin-section-header {
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.admin-section-header h2 {
+  margin: 0;
+  flex: 1;
+}
+
+.driver-profiles-list {
+  display: grid;
+  gap: 16px;
+}
+
+.driver-profile-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 18px;
+  box-shadow: var(--shadow);
+}
+
+.driver-profile-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.driver-profile-header strong {
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.stripe-badge {
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.stripe-not_connected { background: #f1f1f1; color: #555; }
+.stripe-pending       { background: #fff4d2; color: #7a5200; }
+.stripe-restricted    { background: #fff0e0; color: #a05000; }
+.stripe-active        { background: #edfaf3; color: #177245; }
+
+.driver-stripe-flags {
+  display: flex;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.flag-ok { color: var(--success); font-weight: 700; }
+.flag-no { color: var(--muted); }
+
+.driver-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.driver-actions .btn {
+  font-size: 13px;
+  padding: 8px 12px;
+}
+
+.driver-actions .btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.driver-qr-box {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.driver-qr-box img {
+  border-radius: 12px;
+  border: 2px solid var(--line);
+  background: white;
+}
+
+.driver-qr-box a {
+  font-size: 12px;
+  color: var(--muted);
+  word-break: break-all;
+  text-align: center;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--muted);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary);
+}
+
+@media (max-width: 800px) {
+  .driver-profile-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

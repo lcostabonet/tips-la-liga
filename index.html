@@ -14,6 +14,7 @@
     </div>
     <div class="topbar-right">
       <button id="darPropinaBtn" class="btn tip-tab" type="button">💸 Dar propina</button>
+      <button id="adminBtn" class="btn ghost admin-btn hidden" type="button">🚌 Conductores</button>
       <div id="userBox" class="user-box hidden">
         <span id="userNameLabel"></span>
         <button id="logoutBtn" class="btn ghost">Salir</button>
@@ -126,6 +127,40 @@
         <div id="tipsDetail" class="tips-detail"></div>
       </div>
     </section>
+
+    <section id="adminDriversSection" class="hidden">
+      <div class="section-title admin-section-header">
+        <button id="backFromAdminBtn" class="btn ghost" type="button">← Volver</button>
+        <h2>🚌 Perfiles de pago de conductores</h2>
+      </div>
+      <div id="driverProfilesList"></div>
+    </section>
+
+    <dialog id="editDriverDialog" class="dialog">
+      <form id="editDriverForm" class="form compact">
+        <h2 id="editDriverTitle">Editar conductor</h2>
+        <input type="hidden" id="editDriverId" />
+
+        <label for="editDriverName">Nombre público</label>
+        <input id="editDriverName" type="text" required maxlength="60" />
+
+        <label for="editDriverVehicle">Vehículo</label>
+        <input id="editDriverVehicle" type="text" maxlength="80" placeholder="Ej. Bus 🚌" />
+
+        <label for="editDriverRoute">Ruta</label>
+        <input id="editDriverRoute" type="text" maxlength="80" placeholder="Ej. Ruta aeropuerto" />
+
+        <label class="checkbox-label">
+          <input id="editDriverVisible" type="checkbox" />
+          Visible en "Dar propina"
+        </label>
+
+        <div class="dialog-actions">
+          <button id="cancelEditDriverBtn" class="btn ghost" type="button">Cancelar</button>
+          <button class="btn primary" type="submit">Guardar</button>
+        </div>
+      </form>
+    </dialog>
 
     <section id="tipDriverSection" class="hidden">
       <div class="tip-driver-header">
