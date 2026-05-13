@@ -15,6 +15,7 @@
     <div class="topbar-right">
       <button id="darPropinaBtn" class="btn tip-tab" type="button">💸 Dar propina</button>
       <button id="adminBtn" class="btn ghost admin-btn hidden" type="button">🚌 Conductores</button>
+      <button id="driverLinkBtn" class="btn ghost driver-link-btn hidden" type="button">🔗 Mi enlace</button>
       <div id="userBox" class="user-box hidden">
         <span id="userNameLabel"></span>
         <button id="logoutBtn" class="btn ghost">Salir</button>
@@ -134,6 +135,14 @@
         <h2>🚌 Perfiles de pago de conductores</h2>
       </div>
       <div id="driverProfilesList"></div>
+    </section>
+
+    <section id="driverSelfSection" class="hidden">
+      <div class="section-title driver-self-header">
+        <button id="backFromSelfBtn" class="btn ghost" type="button">← Volver</button>
+        <h2>🔗 Mi enlace de propinas</h2>
+      </div>
+      <div id="driverSelfContent"></div>
     </section>
 
     <dialog id="editDriverDialog" class="dialog">

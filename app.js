@@ -23,6 +23,7 @@ let selectedDetail = null;
 let selectedDriver = null;
 let selectedTipAmount = 0;
 let adminDrivers = [];
+let driverSelfProfile = null;
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -99,6 +100,10 @@ const els = {
   editQrPreview: $("#editQrPreview"),
   editQrPreviewImg: $("#editQrPreviewImg"),
   editProviderBadge: $("#editProviderBadge"),
+  driverLinkBtn: $("#driverLinkBtn"),
+  driverSelfSection: $("#driverSelfSection"),
+  backFromSelfBtn: $("#backFromSelfBtn"),
+  driverSelfContent: $("#driverSelfContent"),
 };
 
 function toast(message) {
@@ -600,16 +605,19 @@ function setAuthMode(mode) {
 async function onAuthStateChanged(session) {
   els.tipDriverSection.classList.add("hidden");
   els.adminDriversSection.classList.add("hidden");
+  els.driverSelfSection.classList.add("hidden");
   currentUser = session?.user || null;
 
   if (!currentUser) {
     currentProfile = null;
     allTips = [];
     adminDrivers = [];
+    driverSelfProfile = null;
     els.authSection.classList.remove("hidden");
     els.appSection.classList.add("hidden");
     els.userBox.classList.add("hidden");
     els.adminBtn.classList.add("hidden");
+    els.driverLinkBtn.classList.add("hidden");
     return;
   }
 
@@ -621,6 +629,8 @@ async function onAuthStateChanged(session) {
     els.appSection.classList.remove("hidden");
     if (isAdmin()) els.adminBtn.classList.remove("hidden");
     await loadTips();
+    await loadDriverSelfProfile();
+    if (driverSelfProfile) els.driverLinkBtn.classList.remove("hidden");
   } catch (error) {
     toast(error.message || "Error cargando datos.");
   }
@@ -684,6 +694,8 @@ function setupEvents() {
     window.open(payUrl, "_blank", "noopener");
   });
 
+  els.driverLinkBtn.addEventListener("click", showDriverSelfSection);
+  els.backFromSelfBtn.addEventListener("click", hideDriverSelfSection);
   els.adminBtn.addEventListener("click", showAdminSection);
   els.backFromAdminBtn.addEventListener("click", hideAdminSection);
   els.editDriverForm.addEventListener("submit", saveEditDriver);
@@ -709,6 +721,7 @@ function showTipSection() {
   els.authSection.classList.add("hidden");
   els.appSection.classList.add("hidden");
   els.adminDriversSection.classList.add("hidden");
+  els.driverSelfSection.classList.add("hidden");
   els.tipDriverSection.classList.remove("hidden");
   renderDriverList();
 }
@@ -1153,6 +1166,7 @@ function showAdminSection() {
   els.authSection.classList.add("hidden");
   els.appSection.classList.add("hidden");
   els.tipDriverSection.classList.add("hidden");
+  els.driverSelfSection.classList.add("hidden");
   els.adminDriversSection.classList.remove("hidden");
   loadDriverProfiles().then(renderDriverProfiles).catch((err) => toast(err.message || "Error cargando conductores."));
 }
@@ -1161,6 +1175,189 @@ function hideAdminSection() {
   els.adminDriversSection.classList.add("hidden");
   if (currentUser) els.appSection.classList.remove("hidden");
   else els.authSection.classList.remove("hidden");
+}
+
+async function loadDriverSelfProfile() {
+  if (!client || !currentUser) return;
+  try {
+    const { data, error } = await client
+      .from("driver_payment_profiles")
+      .select("driver_id, display_name, payment_provider, payment_url, payment_instructions, is_visible")
+      .eq("driver_id", currentUser.id)
+      .maybeSingle();
+    if (error) throw error;
+    driverSelfProfile = data || null;
+  } catch {
+    driverSelfProfile = null;
+  }
+}
+
+function showDriverSelfSection() {
+  if (!currentUser) return;
+  els.authSection.classList.add("hidden");
+  els.appSection.classList.add("hidden");
+  els.tipDriverSection.classList.add("hidden");
+  els.adminDriversSection.classList.add("hidden");
+  els.driverSelfSection.classList.remove("hidden");
+
+  const p = driverSelfProfile;
+
+  els.driverSelfContent.innerHTML = `
+    <div class="driver-self-card">
+      <form id="driverSelfForm" class="form compact">
+        <p class="driver-self-name">${escapeHtml(p.display_name)}</p>
+
+        <label for="selfPaymentProvider">Proveedor de pago</label>
+        <div class="provider-select-row">
+          <select id="selfPaymentProvider">
+            <option value="">Sin configurar</option>
+            <option value="paypal"${p.payment_provider === "paypal" ? " selected" : ""}>PayPal</option>
+          </select>
+          <span id="selfProviderBadge" class="payment-badge payment-none hidden"></span>
+        </div>
+
+        <label for="selfPaymentUrl">Enlace de pago</label>
+        <input id="selfPaymentUrl" type="url" maxlength="300"
+               placeholder="https://paypal.me/tu_usuario"
+               value="${escapeHtml(p.payment_url || "")}" />
+
+        <div class="url-validation-hint" id="selfUrlValidationHint"></div>
+
+        <div class="url-test-row">
+          <button id="selfTestLinkBtn" class="btn ghost btn-sm" type="button" disabled>Probar enlace →</button>
+        </div>
+
+        <div class="qr-preview-box hidden" id="selfQrPreview">
+          <img id="selfQrPreviewImg" src="" alt="Previsualización QR" width="120" height="120" loading="lazy" />
+          <p class="help" style="font-size:11px;margin:0">Previsualización del QR</p>
+        </div>
+
+        <label for="selfPaymentInstructions">Instrucciones para el cliente (opcional)</label>
+        <textarea id="selfPaymentInstructions" maxlength="200" rows="2"
+                  placeholder="Ej. Pon tu nombre en el concepto"
+                  style="resize:vertical">${escapeHtml(p.payment_instructions || "")}</textarea>
+
+        <label class="checkbox-label">
+          <input id="selfDriverVisible" type="checkbox"${p.is_visible ? " checked" : ""} />
+          Visible en "Dar propina"
+        </label>
+
+        <div class="disclaimer-box">
+          Tips La Liga no procesa pagos. El pago se realiza fuera de la app y llega directamente a ti.
+        </div>
+
+        <div class="dialog-actions" style="margin-top:8px">
+          <button id="cancelSelfBtn" class="btn ghost" type="button">Cancelar</button>
+          <button class="btn primary" type="submit">Guardar</button>
+        </div>
+      </form>
+    </div>
+  `;
+
+  document.getElementById("driverSelfForm").addEventListener("submit", saveDriverSelfProfile);
+  document.getElementById("cancelSelfBtn").addEventListener("click", hideDriverSelfSection);
+  document.getElementById("selfPaymentUrl").addEventListener("input", updateSelfUrlPreview);
+  document.getElementById("selfPaymentProvider").addEventListener("change", updateSelfUrlPreview);
+  document.getElementById("selfTestLinkBtn").addEventListener("click", () => {
+    const url = document.getElementById("selfPaymentUrl").value.trim();
+    if (url) window.open(url, "_blank", "noopener");
+  });
+
+  updateSelfUrlPreview();
+}
+
+function hideDriverSelfSection() {
+  els.driverSelfSection.classList.add("hidden");
+  if (currentUser) els.appSection.classList.remove("hidden");
+  else els.authSection.classList.remove("hidden");
+}
+
+let selfQrPreviewTimer = null;
+
+function updateSelfUrlPreview() {
+  const providerEl = document.getElementById("selfPaymentProvider");
+  const urlEl = document.getElementById("selfPaymentUrl");
+  const hintEl = document.getElementById("selfUrlValidationHint");
+  const testBtn = document.getElementById("selfTestLinkBtn");
+  const badgeEl = document.getElementById("selfProviderBadge");
+  const qrBox = document.getElementById("selfQrPreview");
+  const qrImg = document.getElementById("selfQrPreviewImg");
+
+  if (!providerEl || !urlEl) return;
+
+  const provider = providerEl.value;
+  const url = urlEl.value.trim();
+  const valid = isValidPaymentUrl(provider, url);
+
+  hintEl.className = "url-validation-hint";
+  if (valid === null) {
+    hintEl.textContent = "";
+  } else if (valid) {
+    hintEl.classList.add("url-valid");
+    hintEl.textContent = "✓ Enlace válido";
+  } else {
+    hintEl.classList.add("url-invalid");
+    hintEl.textContent = "✗ El enlace no parece de PayPal";
+  }
+
+  testBtn.disabled = !url || valid === false;
+
+  if (provider === "paypal") {
+    badgeEl.textContent = "PayPal";
+    badgeEl.className = "payment-badge payment-paypal";
+    badgeEl.classList.remove("hidden");
+  } else if (provider) {
+    badgeEl.textContent = provider;
+    badgeEl.className = "payment-badge payment-none";
+    badgeEl.classList.remove("hidden");
+  } else {
+    badgeEl.classList.add("hidden");
+  }
+
+  clearTimeout(selfQrPreviewTimer);
+  if (url && valid !== false) {
+    selfQrPreviewTimer = setTimeout(() => {
+      qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(url)}`;
+      qrBox.classList.remove("hidden");
+    }, 500);
+  } else {
+    qrBox.classList.add("hidden");
+    qrImg.src = "";
+  }
+}
+
+async function saveDriverSelfProfile(event) {
+  event.preventDefault();
+  if (!currentUser) return;
+  const paymentProvider = document.getElementById("selfPaymentProvider").value || null;
+  const paymentUrl = document.getElementById("selfPaymentUrl").value.trim() || null;
+
+  if (paymentProvider === "paypal" && paymentUrl) {
+    if (!isValidPaymentUrl(paymentProvider, paymentUrl)) {
+      toast("El enlace de PayPal debe empezar por https://paypal.me/ o https://www.paypal.com/");
+      return;
+    }
+  }
+
+  const updates = {
+    payment_provider: paymentProvider,
+    payment_url: paymentUrl,
+    payment_instructions: document.getElementById("selfPaymentInstructions").value.trim() || null,
+    is_visible: document.getElementById("selfDriverVisible").checked,
+  };
+
+  try {
+    const { error } = await client
+      .from("driver_payment_profiles")
+      .update(updates)
+      .eq("driver_id", currentUser.id);
+    if (error) throw error;
+    driverSelfProfile = { ...driverSelfProfile, ...updates };
+    hideDriverSelfSection();
+    toast("Enlace guardado.");
+  } catch (err) {
+    toast(err.message || "Error al guardar.");
+  }
 }
 
 async function init() {
