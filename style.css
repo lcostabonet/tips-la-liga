@@ -765,3 +765,52 @@ select:focus {
     align-items: flex-start;
   }
 }
+
+/* ===== Sprint 3A: Pago externo PayPal ===== */
+
+.payment-badge {
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.payment-paypal { background: #009cde; color: #fff; }
+.payment-none   { background: #f1f1f1; color: #555; }
+
+.external-pay-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.external-pay-btn {
+  width: 100%;
+  padding: 16px;
+  font-size: 17px;
+  font-weight: 800;
+  background: #009cde;
+  color: #fff;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.external-pay-btn:hover {
+  background: #007ab5;
+}
+
+.payment-provider-notice {
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.payment-instructions {
+  text-align: center;
+  font-style: italic;
+  min-height: 0;
+}

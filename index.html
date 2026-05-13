@@ -155,6 +155,18 @@
           Visible en "Dar propina"
         </label>
 
+        <label for="editPaymentProvider">Proveedor de pago</label>
+        <select id="editPaymentProvider">
+          <option value="">Sin configurar</option>
+          <option value="paypal">PayPal</option>
+        </select>
+
+        <label for="editPaymentUrl">Enlace de pago</label>
+        <input id="editPaymentUrl" type="url" maxlength="300" placeholder="https://paypal.me/tu_usuario" />
+
+        <label for="editPaymentInstructions">Instrucciones para el cliente (opcional)</label>
+        <textarea id="editPaymentInstructions" maxlength="200" rows="2" placeholder="Ej. Pon tu nombre en el concepto" style="resize:vertical"></textarea>
+
         <div class="dialog-actions">
           <button id="cancelEditDriverBtn" class="btn ghost" type="button">Cancelar</button>
           <button class="btn primary" type="submit">Guardar</button>
@@ -187,6 +199,14 @@
         </div>
 
         <p class="help qr-hint">Escanea el QR o elige un importe</p>
+
+        <div class="external-pay-section hidden">
+          <p class="payment-instructions help"></p>
+          <button class="btn external-pay-btn" type="button">Pagar →</button>
+          <p class="payment-provider-notice help">
+            🔗 El pago se completa en el proveedor externo. Esta app no procesa ni registra la transacción.
+          </p>
+        </div>
 
         <div id="tipChips" class="tip-chips"></div>
 
