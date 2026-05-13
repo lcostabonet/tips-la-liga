@@ -814,3 +814,51 @@ select:focus {
   font-style: italic;
   min-height: 0;
 }
+
+/* ===== Sprint 3B: Validación y preview en dialog ===== */
+
+.url-validation-hint {
+  font-size: 13px;
+  font-weight: 700;
+  min-height: 18px;
+}
+.url-valid   { color: var(--success); }
+.url-invalid { color: var(--danger); }
+
+.url-test-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.btn-sm {
+  font-size: 13px;
+  padding: 6px 12px;
+  min-height: 44px;
+}
+
+.qr-preview-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px;
+  background: #fafafa;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+.qr-preview-box img {
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: white;
+}
+
+.provider-select-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.provider-select-row select {
+  flex: 1;
+}

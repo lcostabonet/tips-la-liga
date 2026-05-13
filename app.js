@@ -94,6 +94,11 @@ const els = {
   editPaymentUrl: $("#editPaymentUrl"),
   editPaymentInstructions: $("#editPaymentInstructions"),
   externalPayBtn: document.querySelector(".external-pay-btn"),
+  testLinkBtn: $("#testLinkBtn"),
+  urlValidationHint: $("#urlValidationHint"),
+  editQrPreview: $("#editQrPreview"),
+  editQrPreviewImg: $("#editQrPreviewImg"),
+  editProviderBadge: $("#editProviderBadge"),
 };
 
 function toast(message) {
@@ -683,6 +688,12 @@ function setupEvents() {
   els.backFromAdminBtn.addEventListener("click", hideAdminSection);
   els.editDriverForm.addEventListener("submit", saveEditDriver);
   els.cancelEditDriverBtn.addEventListener("click", () => els.editDriverDialog.close());
+  els.editPaymentUrl.addEventListener("input", updatePaymentUrlPreview);
+  els.editPaymentProvider.addEventListener("change", updatePaymentUrlPreview);
+  els.testLinkBtn.addEventListener("click", () => {
+    const url = els.editPaymentUrl.value.trim();
+    if (url) window.open(url, "_blank", "noopener");
+  });
 }
 
 const MOCK_DRIVERS = [
@@ -1033,6 +1044,63 @@ async function adminTestPay(slug) {
   }
 }
 
+const VALID_PAYPAL_DOMAINS = [
+  "https://paypal.me/",
+  "https://www.paypal.me/",
+  "https://paypal.com/",
+  "https://www.paypal.com/",
+];
+
+function isValidPaymentUrl(provider, url) {
+  if (!url) return null;
+  if (provider !== "paypal") return true;
+  return VALID_PAYPAL_DOMAINS.some((d) => url.startsWith(d));
+}
+
+let qrPreviewTimer = null;
+
+function updatePaymentUrlPreview() {
+  const provider = els.editPaymentProvider.value;
+  const url = els.editPaymentUrl.value.trim();
+  const valid = isValidPaymentUrl(provider, url);
+
+  els.urlValidationHint.className = "url-validation-hint";
+  if (valid === null) {
+    els.urlValidationHint.textContent = "";
+  } else if (valid) {
+    els.urlValidationHint.classList.add("url-valid");
+    els.urlValidationHint.textContent = "✓ Enlace válido";
+  } else {
+    els.urlValidationHint.classList.add("url-invalid");
+    els.urlValidationHint.textContent = "✗ El enlace no parece de PayPal";
+  }
+
+  els.testLinkBtn.disabled = !url || valid === false;
+
+  if (provider === "paypal") {
+    els.editProviderBadge.textContent = "PayPal";
+    els.editProviderBadge.className = "payment-badge payment-paypal";
+    els.editProviderBadge.classList.remove("hidden");
+  } else if (provider) {
+    els.editProviderBadge.textContent = provider;
+    els.editProviderBadge.className = "payment-badge payment-none";
+    els.editProviderBadge.classList.remove("hidden");
+  } else {
+    els.editProviderBadge.classList.add("hidden");
+  }
+
+  clearTimeout(qrPreviewTimer);
+  if (url && valid !== false) {
+    qrPreviewTimer = setTimeout(() => {
+      els.editQrPreviewImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(url)}`;
+      els.editQrPreview.classList.remove("hidden");
+    }, 500);
+  } else {
+    els.editQrPreview.classList.add("hidden");
+    els.editQrPreviewImg.src = "";
+  }
+}
+
 function openEditDriverDialog(dataset) {
   els.editDriverId.value = dataset.driverId;
   els.editDriverName.value = dataset.displayName || "";
@@ -1042,6 +1110,7 @@ function openEditDriverDialog(dataset) {
   els.editPaymentProvider.value = dataset.paymentProvider || "";
   els.editPaymentUrl.value = dataset.paymentUrl || "";
   els.editPaymentInstructions.value = dataset.paymentInstructions || "";
+  updatePaymentUrlPreview();
   els.editDriverDialog.showModal();
 }
 
@@ -1052,13 +1121,7 @@ async function saveEditDriver(event) {
   const paymentUrl = els.editPaymentUrl.value.trim() || null;
 
   if (paymentProvider === "paypal" && paymentUrl) {
-    const validPaypalDomains = [
-      "https://paypal.me/",
-      "https://www.paypal.me/",
-      "https://paypal.com/",
-      "https://www.paypal.com/",
-    ];
-    if (!validPaypalDomains.some((d) => paymentUrl.startsWith(d))) {
+    if (!isValidPaymentUrl(paymentProvider, paymentUrl)) {
       toast("El enlace de PayPal debe empezar por https://paypal.me/ o https://www.paypal.com/");
       return;
     }

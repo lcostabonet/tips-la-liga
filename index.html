@@ -156,13 +156,27 @@
         </label>
 
         <label for="editPaymentProvider">Proveedor de pago</label>
-        <select id="editPaymentProvider">
-          <option value="">Sin configurar</option>
-          <option value="paypal">PayPal</option>
-        </select>
+        <div class="provider-select-row">
+          <select id="editPaymentProvider">
+            <option value="">Sin configurar</option>
+            <option value="paypal">PayPal</option>
+          </select>
+          <span id="editProviderBadge" class="payment-badge payment-none hidden"></span>
+        </div>
 
         <label for="editPaymentUrl">Enlace de pago</label>
         <input id="editPaymentUrl" type="url" maxlength="300" placeholder="https://paypal.me/tu_usuario" />
+
+        <div class="url-validation-hint" id="urlValidationHint"></div>
+
+        <div class="url-test-row">
+          <button id="testLinkBtn" class="btn ghost btn-sm" type="button" disabled>Probar →</button>
+        </div>
+
+        <div class="qr-preview-box hidden" id="editQrPreview">
+          <img id="editQrPreviewImg" src="" alt="Previsualización QR" width="120" height="120" loading="lazy" />
+          <p class="help" style="font-size:11px;margin:0">Previsualización del QR</p>
+        </div>
 
         <label for="editPaymentInstructions">Instrucciones para el cliente (opcional)</label>
         <textarea id="editPaymentInstructions" maxlength="200" rows="2" placeholder="Ej. Pon tu nombre en el concepto" style="resize:vertical"></textarea>
