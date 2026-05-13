@@ -90,6 +90,10 @@ const els = {
   editDriverRoute: $("#editDriverRoute"),
   editDriverVisible: $("#editDriverVisible"),
   cancelEditDriverBtn: $("#cancelEditDriverBtn"),
+  editPaymentProvider: $("#editPaymentProvider"),
+  editPaymentUrl: $("#editPaymentUrl"),
+  editPaymentInstructions: $("#editPaymentInstructions"),
+  externalPayBtn: document.querySelector(".external-pay-btn"),
 };
 
 function toast(message) {
@@ -666,6 +670,15 @@ function setupEvents() {
     updatePayButton();
   });
 
+  els.externalPayBtn.addEventListener("click", () => {
+    if (!selectedDriver || !selectedDriver.payment_url) return;
+    let payUrl = selectedDriver.payment_url;
+    if (selectedTipAmount > 0 && payUrl.includes("paypal.me")) {
+      payUrl = `${payUrl.replace(/\/$/, "")}/${selectedTipAmount.toFixed(2)}`;
+    }
+    window.open(payUrl, "_blank", "noopener");
+  });
+
   els.adminBtn.addEventListener("click", showAdminSection);
   els.backFromAdminBtn.addEventListener("click", hideAdminSection);
   els.editDriverForm.addEventListener("submit", saveEditDriver);
@@ -736,6 +749,9 @@ async function renderDriverList() {
       tip_link_slug: driver.tip_link_slug || driver.slug || null,
       public_url: driver.public_url || null,
       isMock: driver.isMock || false,
+      payment_provider: driver.payment_provider || null,
+      payment_url: driver.payment_url || null,
+      payment_instructions: driver.payment_instructions || null,
     };
     card.querySelector("button").addEventListener("click", () => showDriverPayView(normalized));
     els.driverList.appendChild(card);
@@ -755,34 +771,59 @@ function showDriverPayView(driver) {
   els.payDriverEmoji.textContent = driver.emoji || "🚌";
   els.payDriverName.textContent = driverName;
   els.payDriverBio.textContent = driverBio;
-  const qrData = driver.public_url || `tips-la-liga-demo-${driver.tip_link_slug || driver.slug || "demo"}`;
+
+  const hasExternalPay = !driver.isMock && !!driver.payment_url;
+  const qrData = hasExternalPay
+    ? driver.payment_url
+    : (driver.public_url || `tips-la-liga-demo-${driver.tip_link_slug || driver.slug || "demo"}`);
   els.driverQr.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrData)}`;
+
+  const externalPaySection = els.driverPayView.querySelector(".external-pay-section");
   const demoNoticeEl = els.driverPayView.querySelector(".demo-notice");
-  if (demoNoticeEl) {
-    demoNoticeEl.textContent = (driver.tip_link_slug || driver.slug) && !driver.isMock
-      ? "🧪 Modo test — el pago es de prueba con Stripe"
-      : "🧪 Modo demo — el pago no es real";
-  }
-  els.customAmount.value = "";
 
-  els.tipChips.innerHTML = "";
-  for (const amount of TIP_CHIP_AMOUNTS) {
-    const btn = document.createElement("button");
-    btn.className = "chip";
-    btn.type = "button";
-    btn.dataset.amount = amount;
-    btn.textContent = `${amount} €`;
-    btn.addEventListener("click", () => {
-      document.querySelectorAll(".chip").forEach((c) => c.classList.remove("selected"));
-      btn.classList.add("selected");
-      els.customAmount.value = "";
-      selectedTipAmount = amount;
-      updatePayButton();
-    });
-    els.tipChips.appendChild(btn);
+  if (hasExternalPay) {
+    if (externalPaySection) {
+      externalPaySection.classList.remove("hidden");
+      const instrEl = externalPaySection.querySelector(".payment-instructions");
+      if (instrEl) instrEl.textContent = driver.payment_instructions || "";
+      const payBtn = externalPaySection.querySelector(".external-pay-btn");
+      if (payBtn) payBtn.textContent = driver.payment_provider === "paypal" ? "Pagar con PayPal →" : "Pagar →";
+    }
+    els.tipChips.innerHTML = "";
+    els.customAmount.classList.add("hidden");
+    els.payTipBtn.classList.add("hidden");
+    if (demoNoticeEl) demoNoticeEl.classList.add("hidden");
+  } else {
+    if (externalPaySection) externalPaySection.classList.add("hidden");
+    els.customAmount.classList.remove("hidden");
+    els.payTipBtn.classList.remove("hidden");
+    if (demoNoticeEl) {
+      demoNoticeEl.classList.remove("hidden");
+      demoNoticeEl.textContent = driver.isMock
+        ? "🧪 Modo demo — el pago no es real"
+        : (driver.tip_link_slug || driver.slug)
+          ? "🧪 Modo test — el pago es de prueba con Stripe"
+          : "Este conductor aún no tiene método de pago configurado.";
+    }
+    els.customAmount.value = "";
+    els.tipChips.innerHTML = "";
+    for (const amount of TIP_CHIP_AMOUNTS) {
+      const btn = document.createElement("button");
+      btn.className = "chip";
+      btn.type = "button";
+      btn.dataset.amount = amount;
+      btn.textContent = `${amount} €`;
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".chip").forEach((c) => c.classList.remove("selected"));
+        btn.classList.add("selected");
+        els.customAmount.value = "";
+        selectedTipAmount = amount;
+        updatePayButton();
+      });
+      els.tipChips.appendChild(btn);
+    }
+    updatePayButton();
   }
-
-  updatePayButton();
 }
 
 function updatePayButton() {
@@ -801,8 +842,9 @@ async function handleTipPayment() {
   els.payTipBtn.disabled = true;
   els.payTipBtn.textContent = "Procesando...";
 
+  // Stripe aparcado — solo se activa si no hay pago externo configurado
   const slug = selectedDriver.tip_link_slug || selectedDriver.slug;
-  if (slug && client && !selectedDriver.isMock) {
+  if (slug && client && !selectedDriver.isMock && !selectedDriver.payment_url) {
     try {
       const result = await callEdgeFunction(
         "create-driver-payment-link",
@@ -852,7 +894,7 @@ async function loadPublicDrivers() {
   try {
     const { data, error } = await client
       .from("public_driver_profiles")
-      .select("id, display_name, vehicle_info, route_info, tip_link_slug, public_url")
+      .select("id, display_name, vehicle_info, route_info, tip_link_slug, public_url, payment_provider, payment_url, payment_instructions")
       .order("display_name");
     if (error || !data || data.length === 0) return MOCK_DRIVERS;
     return data;
@@ -864,7 +906,7 @@ async function loadPublicDrivers() {
 async function loadDriverProfiles() {
   const { data, error } = await client
     .from("driver_payment_profiles")
-    .select("id, driver_id, display_name, vehicle_info, route_info, stripe_status, charges_enabled, payouts_enabled, tip_link_slug, public_url, is_active, is_visible")
+    .select("id, driver_id, display_name, vehicle_info, route_info, stripe_status, charges_enabled, payouts_enabled, tip_link_slug, public_url, is_active, is_visible, payment_provider, payment_url, payment_instructions")
     .order("display_name");
   if (error) throw error;
   adminDrivers = data || [];
@@ -895,13 +937,20 @@ function renderDriverProfiles() {
     card.className = "driver-profile-card";
     card.dataset.driverId = driver.driver_id;
 
+    const providerBadge = driver.payment_provider
+      ? `<span class="payment-badge payment-${escapeHtml(driver.payment_provider)}">${driver.payment_provider === "paypal" ? "PayPal" : escapeHtml(driver.payment_provider)}</span>`
+      : "";
+
     card.innerHTML = `
       <div class="driver-profile-header">
         <div>
           <strong>${escapeHtml(driver.display_name)}</strong>
           <p class="help">${escapeHtml([driver.vehicle_info, driver.route_info].filter(Boolean).join(" · ") || "—")}</p>
         </div>
-        <span class="stripe-badge stripe-${escapeHtml(statusKey)}">${escapeHtml(stripeStatusLabel(statusKey))}</span>
+        <div style="display:flex;gap:4px;flex-wrap:wrap">
+          ${providerBadge}
+          <span class="stripe-badge stripe-${escapeHtml(statusKey)}">${escapeHtml(stripeStatusLabel(statusKey))}</span>
+        </div>
       </div>
       <div class="driver-stripe-flags">
         <span>Cobros: <span class="${driver.charges_enabled ? "flag-ok" : "flag-no"}">${driver.charges_enabled ? "✓" : "✗"}</span></span>
@@ -913,7 +962,7 @@ function renderDriverProfiles() {
         <button class="btn ghost" data-action="refresh" data-driver-id="${escapeHtml(driver.driver_id)}">Actualizar estado</button>
         <button class="btn ghost" data-action="tiplink" data-driver-id="${escapeHtml(driver.driver_id)}">Generar QR</button>
         <button class="btn ghost" data-action="testpay" data-slug="${escapeHtml(driver.tip_link_slug || "")}" ${!canPay ? "disabled" : ""} title="${!canPay ? "Completa el onboarding primero" : "Pago test de 1€"}">Test 1€</button>
-        <button class="btn ghost" data-action="edit" data-driver-id="${escapeHtml(driver.driver_id)}" data-display-name="${escapeHtml(driver.display_name)}" data-vehicle="${escapeHtml(driver.vehicle_info || "")}" data-route="${escapeHtml(driver.route_info || "")}" data-visible="${driver.is_visible ? "1" : "0"}">Editar</button>
+        <button class="btn ghost" data-action="edit" data-driver-id="${escapeHtml(driver.driver_id)}" data-display-name="${escapeHtml(driver.display_name)}" data-vehicle="${escapeHtml(driver.vehicle_info || "")}" data-route="${escapeHtml(driver.route_info || "")}" data-visible="${driver.is_visible ? "1" : "0"}" data-payment-provider="${escapeHtml(driver.payment_provider || "")}" data-payment-url="${escapeHtml(driver.payment_url || "")}" data-payment-instructions="${escapeHtml(driver.payment_instructions || "")}">Editar</button>
       </div>
       <div class="driver-qr-box${qrUrl ? "" : " hidden"}">
         ${qrUrl ? `<img src="${escapeHtml(qrUrl)}" alt="QR de ${escapeHtml(driver.display_name)}" width="180" height="180" loading="lazy" />` : ""}
@@ -990,17 +1039,39 @@ function openEditDriverDialog(dataset) {
   els.editDriverVehicle.value = dataset.vehicle || "";
   els.editDriverRoute.value = dataset.route || "";
   els.editDriverVisible.checked = dataset.visible === "1";
+  els.editPaymentProvider.value = dataset.paymentProvider || "";
+  els.editPaymentUrl.value = dataset.paymentUrl || "";
+  els.editPaymentInstructions.value = dataset.paymentInstructions || "";
   els.editDriverDialog.showModal();
 }
 
 async function saveEditDriver(event) {
   event.preventDefault();
   const driverId = els.editDriverId.value;
+  const paymentProvider = els.editPaymentProvider.value || null;
+  const paymentUrl = els.editPaymentUrl.value.trim() || null;
+
+  if (paymentProvider === "paypal" && paymentUrl) {
+    const validPaypalDomains = [
+      "https://paypal.me/",
+      "https://www.paypal.me/",
+      "https://paypal.com/",
+      "https://www.paypal.com/",
+    ];
+    if (!validPaypalDomains.some((d) => paymentUrl.startsWith(d))) {
+      toast("El enlace de PayPal debe empezar por https://paypal.me/ o https://www.paypal.com/");
+      return;
+    }
+  }
+
   const updates = {
     display_name: els.editDriverName.value.trim(),
     vehicle_info: els.editDriverVehicle.value.trim() || null,
     route_info: els.editDriverRoute.value.trim() || null,
     is_visible: els.editDriverVisible.checked,
+    payment_provider: paymentProvider,
+    payment_url: paymentUrl,
+    payment_instructions: els.editPaymentInstructions.value.trim() || null,
   };
   if (!updates.display_name) { toast("El nombre es obligatorio."); return; }
   try {

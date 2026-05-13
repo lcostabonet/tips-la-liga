@@ -344,3 +344,65 @@ create trigger guard_stripe_fields_trigger
 -- -----------------------------
 grant select on public.public_driver_profiles to anon, authenticated;
 grant select, insert, update on public.driver_payment_profiles to authenticated;
+
+-- ============================================================
+-- Sprint 3A: Enlace de pago externo por conductor (PayPal)
+-- ============================================================
+
+-- Columnas de pago externo. Coexisten con los campos de Stripe Connect
+-- (aparcado). stripe_account_id y campos relacionados se mantienen intactos.
+alter table public.driver_payment_profiles
+  add column if not exists payment_provider     text,
+  add column if not exists payment_url          text,
+  add column if not exists payment_instructions text;
+
+-- Recrear vista pública con los nuevos campos.
+-- payment_url y payment_provider son datos públicos (el cliente los necesita
+-- para pagar). Stripe y driver_id siguen excluidos.
+drop view if exists public.public_driver_profiles;
+create view public.public_driver_profiles
+  with (security_invoker = false)
+as
+  select
+    id,
+    display_name,
+    vehicle_info,
+    route_info,
+    tip_link_slug,
+    public_url,
+    is_active,
+    is_visible,
+    payment_provider,
+    payment_url,
+    payment_instructions
+  from public.driver_payment_profiles
+  where is_active  = true
+    and is_visible = true;
+
+grant select on public.public_driver_profiles to anon;
+grant select on public.public_driver_profiles to authenticated;
+
+-- Constraint: si payment_provider = 'paypal', payment_url debe ser de dominio PayPal.
+-- Permite: provider NULL, provider distinto de paypal, paypal con URL null o URL PayPal válida.
+-- No restringe proveedores futuros (bizum, revolut, etc.).
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'payment_url_provider_match'
+      and conrelid = 'public.driver_payment_profiles'::regclass
+  ) then
+    alter table public.driver_payment_profiles
+      add constraint payment_url_provider_match
+      check (
+        payment_provider is null
+        or payment_provider <> 'paypal'
+        or payment_url is null
+        or payment_url like 'https://paypal.me/%'
+        or payment_url like 'https://www.paypal.me/%'
+        or payment_url like 'https://paypal.com/%'
+        or payment_url like 'https://www.paypal.com/%'
+      );
+  end if;
+end;
+$$;
