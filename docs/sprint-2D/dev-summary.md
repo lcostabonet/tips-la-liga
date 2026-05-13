@@ -60,8 +60,8 @@ Funciones nuevas:
 
 Funciones modificadas:
 - **`renderDriverList()`** — ahora `async`. Llama `loadPublicDrivers()` con fallback a `MOCK_DRIVERS`. Los conductores reales de Supabase se muestran con su `public_url`/`tip_link_slug` real.
-- **`showDriverPayView(driver)`** — usa `driver.public_url` para el QR si existe; actualiza el aviso demo dinámicamente según si el conductor tiene slug real.
-- **`handleTipPayment()`** — ahora `async`. Si el conductor tiene `tip_link_slug`, llama `create-driver-payment-link` y abre Stripe Checkout en nueva pestaña. Fallback a simulación si no tiene slug.
+- **`showDriverPayView(driver)`** — usa `driver.public_url` para el QR si existe; aviso demo dinámico: "Modo test" solo para conductores reales con slug (`!driver.isMock`); "Modo demo" para mocks.
+- **`handleTipPayment()`** — ahora `async`. Si el conductor tiene `tip_link_slug` y NO es mock (`!selectedDriver.isMock`), llama `create-driver-payment-link` y abre Stripe Checkout. Fallback a simulación para MOCK_DRIVERS o conductores sin slug.
 - **`onAuthStateChanged()`** — muestra `adminBtn` al admin tras login; oculta el botón y limpia `adminDrivers` al logout.
 - **`showTipSection()`** — también oculta `adminDriversSection` al entrar en "Dar propina".
 

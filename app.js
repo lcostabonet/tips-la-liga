@@ -673,10 +673,10 @@ function setupEvents() {
 }
 
 const MOCK_DRIVERS = [
-  { id: 1, name: "Marta G.",  emoji: "🚌", bio: "10 años en ruta",    slug: "marta-g"  },
-  { id: 2, name: "Jordi P.",  emoji: "🚐", bio: "Siempre puntual",    slug: "jordi-p"  },
-  { id: 3, name: "Sandra R.", emoji: "🚍", bio: "La favorita",        slug: "sandra-r" },
-  { id: 4, name: "Toni V.",   emoji: "🚎", bio: "El más simpático",   slug: "toni-v"   },
+  { id: 1, name: "Marta G.",  emoji: "🚌", bio: "10 años en ruta",    slug: "marta-g",  isMock: true },
+  { id: 2, name: "Jordi P.",  emoji: "🚐", bio: "Siempre puntual",    slug: "jordi-p",  isMock: true },
+  { id: 3, name: "Sandra R.", emoji: "🚍", bio: "La favorita",        slug: "sandra-r", isMock: true },
+  { id: 4, name: "Toni V.",   emoji: "🚎", bio: "El más simpático",   slug: "toni-v",   isMock: true },
 ];
 
 const TIP_CHIP_AMOUNTS = [1, 2, 5, 10];
@@ -735,6 +735,7 @@ async function renderDriverList() {
       slug: driver.tip_link_slug || driver.slug || null,
       tip_link_slug: driver.tip_link_slug || driver.slug || null,
       public_url: driver.public_url || null,
+      isMock: driver.isMock || false,
     };
     card.querySelector("button").addEventListener("click", () => showDriverPayView(normalized));
     els.driverList.appendChild(card);
@@ -758,7 +759,7 @@ function showDriverPayView(driver) {
   els.driverQr.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrData)}`;
   const demoNoticeEl = els.driverPayView.querySelector(".demo-notice");
   if (demoNoticeEl) {
-    demoNoticeEl.textContent = (driver.tip_link_slug || driver.slug)
+    demoNoticeEl.textContent = (driver.tip_link_slug || driver.slug) && !driver.isMock
       ? "🧪 Modo test — el pago es de prueba con Stripe"
       : "🧪 Modo demo — el pago no es real";
   }
@@ -801,7 +802,7 @@ async function handleTipPayment() {
   els.payTipBtn.textContent = "Procesando...";
 
   const slug = selectedDriver.tip_link_slug || selectedDriver.slug;
-  if (slug && client) {
+  if (slug && client && !selectedDriver.isMock) {
     try {
       const result = await callEdgeFunction(
         "create-driver-payment-link",
