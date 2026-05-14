@@ -25,6 +25,7 @@ let selectedTipAmount = 0;
 let adminDrivers = [];
 let driverSelfProfile = null;
 let currentAdminMethodsDriverId = null;
+let directDriverSlug = null;
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -652,6 +653,7 @@ async function onAuthStateChanged(session) {
   } catch (error) {
     toast(error.message || "Error cargando datos.");
   }
+  if (directDriverSlug) openDirectDriverView(directDriverSlug);
 }
 
 function setupEvents() {
@@ -761,11 +763,13 @@ const STRINGS = {
     demoNotice:     "🧪 Modo demo — el pago no es real",
     testNotice:     "🧪 Modo test — el pago es de prueba con Stripe",
     noMethodNotice: "Sin método de pago configurado aún.",
+    noActiveMethods: "Este conductor todavía no tiene métodos de pago activos.",
     providerNotice: "🔗 El pago se completa en el proveedor externo. Esta app no procesa ni registra la transacción.",
     payWithPaypal:  "Pagar con PayPal →",
     payWithRevolut: "Pagar con Revolut →",
     payWith:        (n) => `Pagar con ${n} →`,
     processing:     "Procesando...",
+    driverNotFound: "Conductor no encontrado o no disponible en este momento.",
   },
   en: {
     leaveATip:      "💸 Leave a tip",
@@ -782,11 +786,13 @@ const STRINGS = {
     demoNotice:     "🧪 Demo mode — payment is not real",
     testNotice:     "🧪 Test mode — this is a Stripe test payment",
     noMethodNotice: "No payment method configured yet.",
+    noActiveMethods: "This driver does not have active payment methods yet.",
     providerNotice: "🔗 Payment is completed on the external provider. This app does not process or record the transaction.",
     payWithPaypal:  "Pay with PayPal →",
     payWithRevolut: "Pay with Revolut →",
     payWith:        (n) => `Pay with ${n} →`,
     processing:     "Processing...",
+    driverNotFound: "Driver not found or unavailable right now.",
   },
 };
 
@@ -823,6 +829,7 @@ function showTipSection() {
 }
 
 function hideTipSection() {
+  directDriverSlug = null;
   els.tipDriverSection.classList.add("hidden");
   els.driverPayView.classList.add("hidden");
   els.driverList.classList.remove("hidden");
@@ -975,9 +982,7 @@ function showDriverPayView(driver) {
       demoNoticeEl.classList.remove("hidden");
       demoNoticeEl.textContent = driver.isMock
         ? t("demoNotice")
-        : (driver.tip_link_slug || driver.slug)
-          ? t("testNotice")
-          : t("noMethodNotice");
+        : t("noActiveMethods");
     }
     els.customAmount.value = "";
     els.tipChips.innerHTML = "";
@@ -1062,6 +1067,21 @@ async function callEdgeFunction(name, body = {}, requiresAuth = true) {
   const json = await res.json();
   if (!res.ok) throw new Error(json.error ?? `Error ${res.status}`);
   return json;
+}
+
+async function loadDriverBySlug(slug) {
+  if (!client) return null;
+  try {
+    const { data, error } = await client
+      .from("public_driver_profiles")
+      .select("id, display_name, vehicle_info, route_info, tip_link_slug, public_url, payment_provider, payment_url, payment_instructions, payment_methods")
+      .eq("tip_link_slug", slug)
+      .maybeSingle();
+    if (error || !data) return null;
+    return data;
+  } catch {
+    return null;
+  }
 }
 
 async function loadPublicDrivers() {
@@ -1346,7 +1366,7 @@ async function loadDriverSelfProfile() {
   try {
     const { data, error } = await client
       .from("driver_payment_profiles")
-      .select("id, driver_id, display_name, is_visible")
+      .select("id, driver_id, display_name, is_visible, tip_link_slug")
       .eq("driver_id", currentUser.id)
       .maybeSingle();
     if (error) throw error;
@@ -1369,6 +1389,14 @@ async function showDriverSelfSection() {
 
   const p = driverSelfProfile;
 
+  const selfBase = window.location.origin + window.location.pathname;
+  const selfPublicUrl = p.tip_link_slug
+    ? `${selfBase}?driver=${encodeURIComponent(p.tip_link_slug)}`
+    : null;
+  const selfQrSrc = selfPublicUrl
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(selfPublicUrl)}`
+    : null;
+
   els.driverSelfContent.innerHTML = `
     <div class="driver-self-card">
       <p class="driver-self-name">${escapeHtml(p.display_name)}</p>
@@ -1377,6 +1405,26 @@ async function showDriverSelfSection() {
         Visible en "Dar propina"
       </label>
       <div id="selfMethodList"></div>
+      ${selfPublicUrl ? `
+        <div class="driver-public-link-section">
+          <p class="driver-link-label">🔗 Tu enlace de Tips La Liga</p>
+          <div class="driver-link-box">
+            <input id="selfLinkInput" class="driver-link-input" type="text" readonly
+                   value="${escapeHtml(selfPublicUrl)}" />
+            <button id="selfCopyLinkBtn" class="btn ghost btn-sm" type="button">Copiar</button>
+          </div>
+          <div class="driver-link-qr">
+            <img src="${selfQrSrc}" alt="QR de tu enlace" width="120" height="120" loading="lazy" />
+            <p class="help" style="font-size:11px;margin:4px 0 0;text-align:center">
+              Comparte este QR para recibir propinas directas
+            </p>
+          </div>
+        </div>
+      ` : `
+        <p class="help" style="margin:8px 0 16px">
+          Tu enlace público no está disponible aún. Pide al administrador que genere tu slug.
+        </p>
+      `}
       <div class="disclaimer-box">
         Tips La Liga no procesa pagos. El pago se realiza fuera de la app y llega directamente a ti.
       </div>
@@ -1387,6 +1435,29 @@ async function showDriverSelfSection() {
   `;
 
   document.getElementById("closeSelfBtn").addEventListener("click", hideDriverSelfSection);
+  const copyBtn = document.getElementById("selfCopyLinkBtn");
+  if (copyBtn) {
+    copyBtn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(selfPublicUrl);
+        toast("¡Enlace copiado!");
+      } catch {
+        const input = document.getElementById("selfLinkInput");
+        if (input) {
+          input.select();
+          input.setSelectionRange(0, 99999);
+          try {
+            document.execCommand("copy");
+            toast("¡Enlace copiado!");
+          } catch {
+            toast("No se pudo copiar. Cópialo manualmente.");
+          }
+        } else {
+          toast("No se pudo copiar. Cópialo manualmente.");
+        }
+      }
+    });
+  }
   document.getElementById("selfVisibleToggle").addEventListener("change", async (e) => {
     if (!currentUser) return;
     const { error } = await client
@@ -1699,6 +1770,41 @@ function hideDriverMethodsSection() {
   showAdminSection();
 }
 
+async function openDirectDriverView(slug) {
+  els.authSection.classList.add("hidden");
+  els.appSection.classList.add("hidden");
+  els.driverSelfSection.classList.add("hidden");
+  els.driverSetupSection.classList.add("hidden");
+  els.adminDriversSection.classList.add("hidden");
+  els.driverMethodsSection.classList.add("hidden");
+  els.tipDriverSection.classList.remove("hidden");
+  els.driverList.classList.remove("hidden");
+  els.driverPayView.classList.add("hidden");
+  els.driverList.innerHTML = `<p class='help' style='padding:16px'>${t("loading")}</p>`;
+
+  const driver = await loadDriverBySlug(slug);
+  if (!driver) {
+    els.driverList.innerHTML = `<p class='help' style='padding:16px'>${t("driverNotFound")}</p>`;
+    return;
+  }
+
+  const normalized = {
+    id: driver.id,
+    name: driver.display_name,
+    bio: [driver.vehicle_info, driver.route_info].filter(Boolean).join(" · "),
+    emoji: "🚌",
+    slug: driver.tip_link_slug,
+    tip_link_slug: driver.tip_link_slug,
+    public_url: driver.public_url || null,
+    isMock: false,
+    payment_provider: driver.payment_provider || null,
+    payment_url: driver.payment_url || null,
+    payment_instructions: driver.payment_instructions || null,
+    payment_methods: driver.payment_methods || null,
+  };
+  showDriverPayView(normalized);
+}
+
 async function init() {
   setupEvents();
   els.monthPicker.value = currentMonthKey();
@@ -1715,6 +1821,12 @@ async function init() {
   client.auth.onAuthStateChange((_event, session) => {
     onAuthStateChanged(session);
   });
+
+  const driverSlug = new URLSearchParams(window.location.search).get("driver");
+  if (driverSlug) {
+    directDriverSlug = driverSlug;
+    openDirectDriverView(driverSlug);
+  }
 }
 
 init();
