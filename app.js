@@ -24,6 +24,7 @@ let selectedDriver = null;
 let selectedTipAmount = 0;
 let adminDrivers = [];
 let driverSelfProfile = null;
+let currentAdminMethodsDriverId = null;
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -104,6 +105,9 @@ const els = {
   driverSelfSection: $("#driverSelfSection"),
   backFromSelfBtn: $("#backFromSelfBtn"),
   driverSelfContent: $("#driverSelfContent"),
+  driverMethodsSection: $("#driverMethodsSection"),
+  backFromMethodsBtn: $("#backFromMethodsBtn"),
+  driverMethodsContent: $("#driverMethodsContent"),
 };
 
 function toast(message) {
@@ -606,6 +610,7 @@ async function onAuthStateChanged(session) {
   els.tipDriverSection.classList.add("hidden");
   els.adminDriversSection.classList.add("hidden");
   els.driverSelfSection.classList.add("hidden");
+  els.driverMethodsSection.classList.add("hidden");
   currentUser = session?.user || null;
 
   if (!currentUser) {
@@ -696,6 +701,7 @@ function setupEvents() {
 
   els.driverLinkBtn.addEventListener("click", showDriverSelfSection);
   els.backFromSelfBtn.addEventListener("click", hideDriverSelfSection);
+  els.backFromMethodsBtn.addEventListener("click", hideDriverMethodsSection);
   els.adminBtn.addEventListener("click", showAdminSection);
   els.backFromAdminBtn.addEventListener("click", hideAdminSection);
   els.editDriverForm.addEventListener("submit", saveEditDriver);
@@ -722,6 +728,7 @@ function showTipSection() {
   els.appSection.classList.add("hidden");
   els.adminDriversSection.classList.add("hidden");
   els.driverSelfSection.classList.add("hidden");
+  els.driverMethodsSection.classList.add("hidden");
   els.tipDriverSection.classList.remove("hidden");
   renderDriverList();
 }
@@ -776,6 +783,7 @@ async function renderDriverList() {
       payment_provider: driver.payment_provider || null,
       payment_url: driver.payment_url || null,
       payment_instructions: driver.payment_instructions || null,
+      payment_methods: driver.payment_methods || null,
     };
     card.querySelector("button").addEventListener("click", () => showDriverPayView(normalized));
     els.driverList.appendChild(card);
@@ -796,10 +804,12 @@ function showDriverPayView(driver) {
   els.payDriverName.textContent = driverName;
   els.payDriverBio.textContent = driverBio;
 
-  const hasExternalPay = !driver.isMock && !!driver.payment_url;
-  const qrData = hasExternalPay
-    ? driver.payment_url
-    : (driver.public_url || `tips-la-liga-demo-${driver.tip_link_slug || driver.slug || "demo"}`);
+  const methods = !driver.isMock && Array.isArray(driver.payment_methods) && driver.payment_methods.length > 0
+    ? driver.payment_methods : null;
+  const hasExternalPay = !driver.isMock && (!!methods || !!driver.payment_url);
+  const qrData = methods
+    ? methods[0].payment_url
+    : (driver.payment_url || driver.public_url || `tips-la-liga-demo-${driver.tip_link_slug || driver.slug || "demo"}`);
   els.driverQr.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrData)}`;
 
   const externalPaySection = els.driverPayView.querySelector(".external-pay-section");
@@ -809,9 +819,37 @@ function showDriverPayView(driver) {
     if (externalPaySection) {
       externalPaySection.classList.remove("hidden");
       const instrEl = externalPaySection.querySelector(".payment-instructions");
-      if (instrEl) instrEl.textContent = driver.payment_instructions || "";
-      const payBtn = externalPaySection.querySelector(".external-pay-btn");
-      if (payBtn) payBtn.textContent = driver.payment_provider === "paypal" ? "Pagar con PayPal →" : "Pagar →";
+      const methodsList = externalPaySection.querySelector(".payment-methods-list");
+      const legacyBtn = externalPaySection.querySelector(".external-pay-btn");
+
+      if (methods) {
+        // Flujo Sprint 3D: multi-método
+        if (instrEl) instrEl.textContent = methods[0].instructions || "";
+        if (legacyBtn) legacyBtn.classList.add("hidden");
+        if (methodsList) {
+          methodsList.innerHTML = "";
+          for (const m of methods) {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = `btn payment-method-btn ${m.provider}`;
+            btn.textContent = providerLabel(m.provider);
+            btn.addEventListener("click", () => {
+              els.driverQr.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(m.payment_url)}`;
+              if (instrEl) instrEl.textContent = m.instructions || "";
+              window.open(m.payment_url, "_blank", "noopener");
+            });
+            methodsList.appendChild(btn);
+          }
+        }
+      } else {
+        // Flujo legacy Sprint 3A
+        if (instrEl) instrEl.textContent = driver.payment_instructions || "";
+        if (methodsList) methodsList.innerHTML = "";
+        if (legacyBtn) {
+          legacyBtn.classList.remove("hidden");
+          legacyBtn.textContent = driver.payment_provider === "paypal" ? "Pagar con PayPal →" : "Pagar →";
+        }
+      }
     }
     els.tipChips.innerHTML = "";
     els.customAmount.classList.add("hidden");
@@ -918,7 +956,7 @@ async function loadPublicDrivers() {
   try {
     const { data, error } = await client
       .from("public_driver_profiles")
-      .select("id, display_name, vehicle_info, route_info, tip_link_slug, public_url, payment_provider, payment_url, payment_instructions")
+      .select("id, display_name, vehicle_info, route_info, tip_link_slug, public_url, payment_provider, payment_url, payment_instructions, payment_methods")
       .order("display_name");
     if (error || !data || data.length === 0) return MOCK_DRIVERS;
     return data;
@@ -987,6 +1025,7 @@ function renderDriverProfiles() {
         <button class="btn ghost" data-action="tiplink" data-driver-id="${escapeHtml(driver.driver_id)}">Generar QR</button>
         <button class="btn ghost" data-action="testpay" data-slug="${escapeHtml(driver.tip_link_slug || "")}" ${!canPay ? "disabled" : ""} title="${!canPay ? "Completa el onboarding primero" : "Pago test de 1€"}">Test 1€</button>
         <button class="btn ghost" data-action="edit" data-driver-id="${escapeHtml(driver.driver_id)}" data-display-name="${escapeHtml(driver.display_name)}" data-vehicle="${escapeHtml(driver.vehicle_info || "")}" data-route="${escapeHtml(driver.route_info || "")}" data-visible="${driver.is_visible ? "1" : "0"}" data-payment-provider="${escapeHtml(driver.payment_provider || "")}" data-payment-url="${escapeHtml(driver.payment_url || "")}" data-payment-instructions="${escapeHtml(driver.payment_instructions || "")}">Editar</button>
+        <button class="btn ghost" data-action="methods" data-driver-profile-id="${escapeHtml(driver.id)}" data-display-name="${escapeHtml(driver.display_name)}">Métodos de pago</button>
       </div>
       <div class="driver-qr-box${qrUrl ? "" : " hidden"}">
         ${qrUrl ? `<img src="${escapeHtml(qrUrl)}" alt="QR de ${escapeHtml(driver.display_name)}" width="180" height="180" loading="lazy" />` : ""}
@@ -1005,6 +1044,7 @@ function renderDriverProfiles() {
       if (action === "tiplink")    await adminGenerateTipLink(dId);
       if (action === "testpay")    await adminTestPay(btn.dataset.slug);
       if (action === "edit")       openEditDriverDialog(btn.dataset);
+      if (action === "methods")    showDriverMethodsSection(btn.dataset);
     });
 
     list.appendChild(card);
@@ -1057,17 +1097,29 @@ async function adminTestPay(slug) {
   }
 }
 
-const VALID_PAYPAL_DOMAINS = [
-  "https://paypal.me/",
-  "https://www.paypal.me/",
-  "https://paypal.com/",
-  "https://www.paypal.com/",
-];
+const VALID_PAYMENT_DOMAINS = {
+  paypal:  ["https://paypal.me/", "https://www.paypal.me/", "https://paypal.com/", "https://www.paypal.com/"],
+  revolut: ["https://revolut.me/", "https://app.revolut.com/"],
+};
 
 function isValidPaymentUrl(provider, url) {
   if (!url) return null;
-  if (provider !== "paypal") return true;
-  return VALID_PAYPAL_DOMAINS.some((d) => url.startsWith(d));
+  const domains = VALID_PAYMENT_DOMAINS[provider];
+  if (!domains) return true;
+  return domains.some((d) => url.startsWith(d));
+}
+
+function providerDisplayName(provider) {
+  return { paypal: "PayPal", revolut: "Revolut" }[provider] || provider;
+}
+
+function providerLabel(provider) {
+  return { paypal: "Pagar con PayPal →", revolut: "Pagar con Revolut →" }[provider]
+    || `Pagar con ${providerDisplayName(provider)} →`;
+}
+
+function providerValidationMsg(provider) {
+  return `✗ El enlace no parece de ${providerDisplayName(provider)}`;
 }
 
 let qrPreviewTimer = null;
@@ -1085,18 +1137,14 @@ function updatePaymentUrlPreview() {
     els.urlValidationHint.textContent = "✓ Enlace válido";
   } else {
     els.urlValidationHint.classList.add("url-invalid");
-    els.urlValidationHint.textContent = "✗ El enlace no parece de PayPal";
+    els.urlValidationHint.textContent = providerValidationMsg(provider);
   }
 
   els.testLinkBtn.disabled = !url || valid === false;
 
-  if (provider === "paypal") {
-    els.editProviderBadge.textContent = "PayPal";
-    els.editProviderBadge.className = "payment-badge payment-paypal";
-    els.editProviderBadge.classList.remove("hidden");
-  } else if (provider) {
-    els.editProviderBadge.textContent = provider;
-    els.editProviderBadge.className = "payment-badge payment-none";
+  if (provider) {
+    els.editProviderBadge.textContent = providerDisplayName(provider);
+    els.editProviderBadge.className = `payment-badge payment-${provider}`;
     els.editProviderBadge.classList.remove("hidden");
   } else {
     els.editProviderBadge.classList.add("hidden");
@@ -1167,6 +1215,7 @@ function showAdminSection() {
   els.appSection.classList.add("hidden");
   els.tipDriverSection.classList.add("hidden");
   els.driverSelfSection.classList.add("hidden");
+  els.driverMethodsSection.classList.add("hidden");
   els.adminDriversSection.classList.remove("hidden");
   loadDriverProfiles().then(renderDriverProfiles).catch((err) => toast(err.message || "Error cargando conductores."));
 }
@@ -1182,7 +1231,7 @@ async function loadDriverSelfProfile() {
   try {
     const { data, error } = await client
       .from("driver_payment_profiles")
-      .select("driver_id, display_name, payment_provider, payment_url, payment_instructions, is_visible")
+      .select("id, driver_id, display_name, payment_provider, payment_url, payment_instructions, is_visible")
       .eq("driver_id", currentUser.id)
       .maybeSingle();
     if (error) throw error;
@@ -1192,78 +1241,50 @@ async function loadDriverSelfProfile() {
   }
 }
 
-function showDriverSelfSection() {
+async function showDriverSelfSection() {
   if (!currentUser) return;
   els.authSection.classList.add("hidden");
   els.appSection.classList.add("hidden");
   els.tipDriverSection.classList.add("hidden");
   els.adminDriversSection.classList.add("hidden");
+  els.driverMethodsSection.classList.add("hidden");
   els.driverSelfSection.classList.remove("hidden");
 
   const p = driverSelfProfile;
 
   els.driverSelfContent.innerHTML = `
     <div class="driver-self-card">
-      <form id="driverSelfForm" class="form compact">
-        <p class="driver-self-name">${escapeHtml(p.display_name)}</p>
-
-        <label for="selfPaymentProvider">Proveedor de pago</label>
-        <div class="provider-select-row">
-          <select id="selfPaymentProvider">
-            <option value="">Sin configurar</option>
-            <option value="paypal"${p.payment_provider === "paypal" ? " selected" : ""}>PayPal</option>
-          </select>
-          <span id="selfProviderBadge" class="payment-badge payment-none hidden"></span>
-        </div>
-
-        <label for="selfPaymentUrl">Enlace de pago</label>
-        <input id="selfPaymentUrl" type="url" maxlength="300"
-               placeholder="https://paypal.me/tu_usuario"
-               value="${escapeHtml(p.payment_url || "")}" />
-
-        <div class="url-validation-hint" id="selfUrlValidationHint"></div>
-
-        <div class="url-test-row">
-          <button id="selfTestLinkBtn" class="btn ghost btn-sm" type="button" disabled>Probar enlace →</button>
-        </div>
-
-        <div class="qr-preview-box hidden" id="selfQrPreview">
-          <img id="selfQrPreviewImg" src="" alt="Previsualización QR" width="120" height="120" loading="lazy" />
-          <p class="help" style="font-size:11px;margin:0">Previsualización del QR</p>
-        </div>
-
-        <label for="selfPaymentInstructions">Instrucciones para el cliente (opcional)</label>
-        <textarea id="selfPaymentInstructions" maxlength="200" rows="2"
-                  placeholder="Ej. Pon tu nombre en el concepto"
-                  style="resize:vertical">${escapeHtml(p.payment_instructions || "")}</textarea>
-
-        <label class="checkbox-label">
-          <input id="selfDriverVisible" type="checkbox"${p.is_visible ? " checked" : ""} />
-          Visible en "Dar propina"
-        </label>
-
-        <div class="disclaimer-box">
-          Tips La Liga no procesa pagos. El pago se realiza fuera de la app y llega directamente a ti.
-        </div>
-
-        <div class="dialog-actions" style="margin-top:8px">
-          <button id="cancelSelfBtn" class="btn ghost" type="button">Cancelar</button>
-          <button class="btn primary" type="submit">Guardar</button>
-        </div>
-      </form>
+      <p class="driver-self-name">${escapeHtml(p.display_name)}</p>
+      <label class="checkbox-label" style="margin-bottom:16px">
+        <input id="selfVisibleToggle" type="checkbox"${p.is_visible ? " checked" : ""} />
+        Visible en "Dar propina"
+      </label>
+      <div id="selfMethodList"></div>
+      <div class="disclaimer-box">
+        Tips La Liga no procesa pagos. El pago se realiza fuera de la app y llega directamente a ti.
+      </div>
+      <div style="margin-top:12px;display:flex;justify-content:flex-end">
+        <button id="closeSelfBtn" class="btn ghost" type="button">Cerrar</button>
+      </div>
     </div>
   `;
 
-  document.getElementById("driverSelfForm").addEventListener("submit", saveDriverSelfProfile);
-  document.getElementById("cancelSelfBtn").addEventListener("click", hideDriverSelfSection);
-  document.getElementById("selfPaymentUrl").addEventListener("input", updateSelfUrlPreview);
-  document.getElementById("selfPaymentProvider").addEventListener("change", updateSelfUrlPreview);
-  document.getElementById("selfTestLinkBtn").addEventListener("click", () => {
-    const url = document.getElementById("selfPaymentUrl").value.trim();
-    if (url) window.open(url, "_blank", "noopener");
+  document.getElementById("closeSelfBtn").addEventListener("click", hideDriverSelfSection);
+  document.getElementById("selfVisibleToggle").addEventListener("change", async (e) => {
+    if (!currentUser) return;
+    const { error } = await client
+      .from("driver_payment_profiles")
+      .update({ is_visible: e.target.checked })
+      .eq("driver_id", currentUser.id);
+    if (error) toast(error.message || "Error al guardar.");
+    else {
+      driverSelfProfile = { ...driverSelfProfile, is_visible: e.target.checked };
+      toast(e.target.checked ? "Ahora eres visible." : "Ahora estás oculto.");
+    }
   });
 
-  updateSelfUrlPreview();
+  const methods = await loadSelfMethods();
+  renderMethodList(methods, document.getElementById("selfMethodList"), driverSelfProfile.id, p.display_name);
 }
 
 function hideDriverSelfSection() {
@@ -1297,18 +1318,14 @@ function updateSelfUrlPreview() {
     hintEl.textContent = "✓ Enlace válido";
   } else {
     hintEl.classList.add("url-invalid");
-    hintEl.textContent = "✗ El enlace no parece de PayPal";
+    hintEl.textContent = providerValidationMsg(provider);
   }
 
   testBtn.disabled = !url || valid === false;
 
-  if (provider === "paypal") {
-    badgeEl.textContent = "PayPal";
-    badgeEl.className = "payment-badge payment-paypal";
-    badgeEl.classList.remove("hidden");
-  } else if (provider) {
-    badgeEl.textContent = provider;
-    badgeEl.className = "payment-badge payment-none";
+  if (provider) {
+    badgeEl.textContent = providerDisplayName(provider);
+    badgeEl.className = `payment-badge payment-${provider}`;
     badgeEl.classList.remove("hidden");
   } else {
     badgeEl.classList.add("hidden");
@@ -1358,6 +1375,243 @@ async function saveDriverSelfProfile(event) {
   } catch (err) {
     toast(err.message || "Error al guardar.");
   }
+}
+
+async function loadDriverMethods(driverProfileId) {
+  const { data, error } = await client
+    .from("driver_payment_methods")
+    .select("id, provider, payment_url, instructions, is_enabled, is_verified, display_order")
+    .eq("driver_profile_id", driverProfileId)
+    .order("display_order")
+    .order("created_at");
+  if (error) throw error;
+  return data || [];
+}
+
+async function loadSelfMethods() {
+  if (!client || !currentUser || !driverSelfProfile?.id) return [];
+  try { return await loadDriverMethods(driverSelfProfile.id); }
+  catch { return []; }
+}
+
+async function insertDriverMethod(driverProfileId, payload) {
+  const { error } = await client
+    .from("driver_payment_methods")
+    .insert({ driver_profile_id: driverProfileId, ...payload });
+  if (error) throw error;
+}
+
+async function updateDriverMethod(methodId, payload) {
+  const { error } = await client
+    .from("driver_payment_methods")
+    .update(payload)
+    .eq("id", methodId);
+  if (error) throw error;
+}
+
+async function deleteDriverMethod(methodId) {
+  const { error } = await client
+    .from("driver_payment_methods")
+    .delete()
+    .eq("id", methodId);
+  if (error) throw error;
+}
+
+function renderMethodList(methods, container, driverId, driverName) {
+  container.innerHTML = "";
+
+  if (!methods.length) {
+    container.innerHTML = "<p class='help' style='margin-bottom:12px'>Sin métodos configurados.</p>";
+  }
+
+  for (const m of methods) {
+    const item = document.createElement("div");
+    item.className = "method-list-item";
+    item.innerHTML = `
+      <span class="payment-badge payment-${escapeHtml(m.provider)}">${escapeHtml(providerDisplayName(m.provider))}</span>
+      <span class="method-url help">${escapeHtml(m.payment_url)}</span>
+      <span class="${m.is_enabled ? "flag-ok" : "flag-no"}" style="font-size:12px">${m.is_enabled ? "Activo" : "Inactivo"}</span>
+      <div class="method-actions">
+        <button class="btn ghost" data-mid="${escapeHtml(m.id)}" data-maction="edit-method">Editar</button>
+        <button class="btn danger" data-mid="${escapeHtml(m.id)}" data-maction="delete-method">Eliminar</button>
+      </div>
+    `;
+    container.appendChild(item);
+  }
+
+  const addBtn = document.createElement("button");
+  addBtn.className = "btn ghost";
+  addBtn.type = "button";
+  addBtn.textContent = "+ Añadir método";
+  addBtn.style.marginTop = "10px";
+  addBtn.addEventListener("click", () => showMethodForm(null, driverId, container, driverName));
+  container.appendChild(addBtn);
+
+  container.addEventListener("click", async (e) => {
+    const btn = e.target.closest("[data-maction]");
+    if (!btn) return;
+    const mid = btn.dataset.mid;
+    if (btn.dataset.maction === "delete-method") {
+      if (!confirm("¿Eliminar este método de pago?")) return;
+      try {
+        await deleteDriverMethod(mid);
+        const updated = await loadDriverMethods(driverId);
+        renderMethodList(updated, container, driverId, driverName);
+        toast("Método eliminado.");
+      } catch (err) { toast(err.message || "Error al eliminar."); }
+    }
+    if (btn.dataset.maction === "edit-method") {
+      const methods = await loadDriverMethods(driverId);
+      const existing = methods.find((m) => m.id === mid);
+      if (existing) showMethodForm(existing, driverId, container, driverName);
+    }
+  });
+}
+
+let methodFormPreviewTimer = null;
+
+function updateMethodFormPreview() {
+  const providerEl = document.getElementById("mProvider");
+  const urlEl = document.getElementById("mUrl");
+  const hintEl = document.getElementById("mUrlHint");
+  const testBtn = document.getElementById("mTestBtn");
+  const badgeEl = document.getElementById("mProviderBadge");
+  const qrBox = document.getElementById("mQrPreview");
+  const qrImg = document.getElementById("mQrImg");
+  if (!providerEl || !urlEl) return;
+
+  const provider = providerEl.value;
+  const url = urlEl.value.trim();
+  const valid = isValidPaymentUrl(provider, url);
+
+  hintEl.className = "url-validation-hint";
+  if (valid === null) hintEl.textContent = "";
+  else if (valid) { hintEl.classList.add("url-valid"); hintEl.textContent = "✓ Enlace válido"; }
+  else { hintEl.classList.add("url-invalid"); hintEl.textContent = providerValidationMsg(provider); }
+
+  testBtn.disabled = !url || valid === false;
+
+  if (provider) {
+    badgeEl.textContent = providerDisplayName(provider);
+    badgeEl.className = `payment-badge payment-${provider}`;
+    badgeEl.classList.remove("hidden");
+  } else {
+    badgeEl.classList.add("hidden");
+  }
+
+  clearTimeout(methodFormPreviewTimer);
+  if (url && valid !== false) {
+    methodFormPreviewTimer = setTimeout(() => {
+      qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(url)}`;
+      qrBox.classList.remove("hidden");
+    }, 500);
+  } else {
+    qrBox.classList.add("hidden");
+    qrImg.src = "";
+  }
+}
+
+function showMethodForm(existing, driverId, listContainer, driverName) {
+  listContainer.querySelectorAll(".method-form-wrapper").forEach((el) => el.remove());
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "method-form-wrapper driver-self-card";
+  wrapper.style.marginTop = "16px";
+  wrapper.innerHTML = `
+    <form id="methodForm" class="form compact">
+      <label for="mProvider">Proveedor</label>
+      <div class="provider-select-row">
+        <select id="mProvider">
+          <option value="paypal"${existing?.provider === "paypal" ? " selected" : ""}>PayPal</option>
+          <option value="revolut"${existing?.provider === "revolut" ? " selected" : ""}>Revolut</option>
+        </select>
+        <span id="mProviderBadge" class="payment-badge payment-none hidden"></span>
+      </div>
+      <label for="mUrl">Enlace de pago</label>
+      <input id="mUrl" type="url" maxlength="300"
+             placeholder="https://paypal.me/... o https://revolut.me/..."
+             value="${escapeHtml(existing?.payment_url || "")}" />
+      <div class="url-validation-hint" id="mUrlHint"></div>
+      <div class="url-test-row">
+        <button id="mTestBtn" class="btn ghost btn-sm" type="button" disabled>Probar →</button>
+      </div>
+      <div class="qr-preview-box hidden" id="mQrPreview">
+        <img id="mQrImg" src="" alt="QR preview" width="120" height="120" loading="lazy" />
+        <p class="help" style="font-size:11px;margin:0">Previsualización del QR</p>
+      </div>
+      <label for="mInstructions">Instrucciones (opcional)</label>
+      <textarea id="mInstructions" maxlength="200" rows="2" style="resize:vertical">${escapeHtml(existing?.instructions || "")}</textarea>
+      <label class="checkbox-label">
+        <input id="mIsActive" type="checkbox"${existing?.is_enabled !== false ? " checked" : ""} />
+        Activo
+      </label>
+      <div class="dialog-actions" style="margin-top:8px">
+        <button id="mCancelBtn" class="btn ghost" type="button">Cancelar</button>
+        <button class="btn primary" type="submit">${existing ? "Guardar cambios" : "Añadir método"}</button>
+      </div>
+    </form>
+  `;
+
+  listContainer.appendChild(wrapper);
+
+  document.getElementById("mProvider").addEventListener("change", updateMethodFormPreview);
+  document.getElementById("mUrl").addEventListener("input", updateMethodFormPreview);
+  document.getElementById("mTestBtn").addEventListener("click", () => {
+    const url = document.getElementById("mUrl").value.trim();
+    if (url) window.open(url, "_blank", "noopener");
+  });
+  document.getElementById("mCancelBtn").addEventListener("click", () => wrapper.remove());
+  document.getElementById("methodForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!currentUser) return;
+    const provider = document.getElementById("mProvider").value;
+    const url = document.getElementById("mUrl").value.trim();
+    if (!url) { toast("La URL es obligatoria."); return; }
+    if (!isValidPaymentUrl(provider, url)) {
+      toast(`La URL no es válida para ${providerDisplayName(provider)}.`);
+      return;
+    }
+    const payload = {
+      provider,
+      payment_url: url,
+      instructions: document.getElementById("mInstructions").value.trim() || null,
+      is_enabled: document.getElementById("mIsActive").checked,
+    };
+    try {
+      if (existing) await updateDriverMethod(existing.id, payload);
+      else await insertDriverMethod(driverId, payload);
+      const updated = await loadDriverMethods(driverId);
+      renderMethodList(updated, listContainer, driverId, driverName);
+      wrapper.remove();
+      toast(existing ? "Método actualizado." : "Método añadido.");
+    } catch (err) { toast(err.message || "Error al guardar."); }
+  });
+
+  updateMethodFormPreview();
+}
+
+async function showDriverMethodsSection(driverDataset) {
+  if (!currentUser) return;
+  currentAdminMethodsDriverId = driverDataset.driverProfileId;
+  els.authSection.classList.add("hidden");
+  els.appSection.classList.add("hidden");
+  els.tipDriverSection.classList.add("hidden");
+  els.adminDriversSection.classList.add("hidden");
+  els.driverSelfSection.classList.add("hidden");
+  els.driverMethodsSection.classList.remove("hidden");
+
+  els.driverMethodsContent.innerHTML = "<p class='help'>Cargando...</p>";
+  try {
+    const methods = await loadDriverMethods(driverDataset.driverProfileId);
+    renderMethodList(methods, els.driverMethodsContent, driverDataset.driverProfileId, driverDataset.displayName);
+  } catch (err) {
+    els.driverMethodsContent.innerHTML = `<p class='help'>${escapeHtml(err.message || "Error cargando métodos.")}</p>`;
+  }
+}
+
+function hideDriverMethodsSection() {
+  els.driverMethodsSection.classList.add("hidden");
+  showAdminSection();
 }
 
 async function init() {

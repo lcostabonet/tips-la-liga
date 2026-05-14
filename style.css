@@ -904,3 +904,57 @@ select:focus {
   font-size: 13px;
   line-height: 1.5;
 }
+
+/* ===== Sprint 3D: Múltiples métodos de pago ===== */
+
+.payment-revolut { background: #7c3aed; color: #fff; }
+
+.payment-methods-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 8px 0;
+}
+
+.payment-method-btn {
+  width: 100%;
+  padding: 16px;
+  font-size: 17px;
+  font-weight: 800;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.payment-method-btn.paypal  { background: #009cde; color: #fff; }
+.payment-method-btn.paypal:hover  { background: #007ab5; }
+.payment-method-btn.revolut { background: #7c3aed; color: #fff; }
+.payment-method-btn.revolut:hover { background: #6d28d9; }
+
+.method-list-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fffdf9;
+  flex-wrap: wrap;
+}
+
+.method-url {
+  flex: 1;
+  word-break: break-all;
+  font-size: 13px;
+}
+
+.method-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.method-actions .btn {
+  font-size: 12px;
+  padding: 6px 10px;
+}

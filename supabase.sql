@@ -406,3 +406,231 @@ begin
   end if;
 end;
 $$;
+
+-- ============================================================
+-- Sprint 3D: Múltiples métodos de pago externos por conductor
+-- ============================================================
+
+-- -----------------------------
+-- Tabla driver_payment_methods
+-- FK → driver_payment_profiles(id): los métodos pertenecen al perfil de pago,
+-- no directamente al usuario Auth. ON DELETE CASCADE elimina métodos si se
+-- borra el perfil del conductor.
+-- is_enabled: activo/inactivo por el conductor o el admin.
+-- is_verified: el admin puede marcar que ha verificado el enlace (Sprint 3E).
+-- -----------------------------
+create table if not exists public.driver_payment_methods (
+  id                uuid        primary key default gen_random_uuid(),
+  driver_profile_id uuid        not null references public.driver_payment_profiles(id) on delete cascade,
+  provider          text        not null,
+  payment_url       text        not null,
+  instructions      text,
+  is_enabled        boolean     not null default true,
+  is_verified       boolean     not null default false,
+  display_order     smallint    not null default 0,
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now()
+);
+
+create index if not exists driver_payment_methods_profile_id_idx
+  on public.driver_payment_methods(driver_profile_id);
+
+drop trigger if exists driver_payment_methods_set_updated_at
+  on public.driver_payment_methods;
+create trigger driver_payment_methods_set_updated_at
+  before update on public.driver_payment_methods
+  for each row execute function public.set_updated_at();
+
+-- -----------------------------
+-- Constraints idempotentes
+-- -----------------------------
+
+-- Un método por proveedor por perfil de conductor
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'uq_driver_payment_method_provider'
+      and conrelid = 'public.driver_payment_methods'::regclass
+  ) then
+    alter table public.driver_payment_methods
+      add constraint uq_driver_payment_method_provider
+      unique (driver_profile_id, provider);
+  end if;
+end;
+$$;
+
+-- Validación de dominios por proveedor.
+-- PayPal y Revolut tienen dominios controlados.
+-- Proveedores futuros (bizum, etc.) pasan sin restricción hasta que se definan sus dominios.
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'dpm_url_valid'
+      and conrelid = 'public.driver_payment_methods'::regclass
+  ) then
+    alter table public.driver_payment_methods
+      add constraint dpm_url_valid
+      check (
+        (provider = 'paypal' and (
+          payment_url like 'https://paypal.me/%'
+          or payment_url like 'https://www.paypal.me/%'
+          or payment_url like 'https://paypal.com/%'
+          or payment_url like 'https://www.paypal.com/%'
+        ))
+        or
+        (provider = 'revolut' and (
+          payment_url like 'https://revolut.me/%'
+          or payment_url like 'https://app.revolut.com/%'
+        ))
+        or
+        (provider not in ('paypal', 'revolut'))
+      );
+  end if;
+end;
+$$;
+
+-- -----------------------------
+-- RLS: driver_payment_methods
+-- El conductor verifica propiedad vía EXISTS sobre driver_payment_profiles,
+-- ya que driver_payment_methods no almacena driver_id directamente.
+-- La vista public_driver_profiles (security_invoker=false) lee métodos sin RLS,
+-- por lo que anon no necesita grant directo sobre esta tabla.
+-- -----------------------------
+alter table public.driver_payment_methods enable row level security;
+
+drop policy if exists "dpm_conductor_read_own"   on public.driver_payment_methods;
+drop policy if exists "dpm_conductor_insert_own" on public.driver_payment_methods;
+drop policy if exists "dpm_conductor_update_own" on public.driver_payment_methods;
+drop policy if exists "dpm_conductor_delete_own" on public.driver_payment_methods;
+drop policy if exists "dpm_admin_all"            on public.driver_payment_methods;
+
+-- Conductor: leer sus propios métodos
+create policy "dpm_conductor_read_own"
+  on public.driver_payment_methods
+  for select to authenticated
+  using (
+    exists (
+      select 1 from public.driver_payment_profiles dpp
+      where dpp.id        = driver_payment_methods.driver_profile_id
+        and dpp.driver_id = auth.uid()
+    )
+  );
+
+-- Conductor: crear métodos en su propio perfil
+create policy "dpm_conductor_insert_own"
+  on public.driver_payment_methods
+  for insert to authenticated
+  with check (
+    exists (
+      select 1 from public.driver_payment_profiles dpp
+      where dpp.id        = driver_payment_methods.driver_profile_id
+        and dpp.driver_id = auth.uid()
+    )
+  );
+
+-- Conductor: actualizar sus propios métodos
+create policy "dpm_conductor_update_own"
+  on public.driver_payment_methods
+  for update to authenticated
+  using (
+    exists (
+      select 1 from public.driver_payment_profiles dpp
+      where dpp.id        = driver_payment_methods.driver_profile_id
+        and dpp.driver_id = auth.uid()
+    )
+  )
+  with check (
+    exists (
+      select 1 from public.driver_payment_profiles dpp
+      where dpp.id        = driver_payment_methods.driver_profile_id
+        and dpp.driver_id = auth.uid()
+    )
+  );
+
+-- Conductor: eliminar sus propios métodos
+create policy "dpm_conductor_delete_own"
+  on public.driver_payment_methods
+  for delete to authenticated
+  using (
+    exists (
+      select 1 from public.driver_payment_profiles dpp
+      where dpp.id        = driver_payment_methods.driver_profile_id
+        and dpp.driver_id = auth.uid()
+    )
+  );
+
+-- Admin: acceso total
+create policy "dpm_admin_all"
+  on public.driver_payment_methods
+  for all to authenticated
+  using  (public.is_admin())
+  with check (public.is_admin());
+
+grant select, insert, update, delete on public.driver_payment_methods to authenticated;
+
+-- -----------------------------
+-- Vista public_driver_profiles actualizada
+-- Añade payment_methods: array JSON de métodos enabled ordenado por display_order.
+-- Join: m.driver_profile_id = dpp.id (no driver_id).
+-- Columnas legacy de Sprint 3A se mantienen para compatibilidad hasta Sprint 3E.
+-- security_invoker = false: corre como postgres, bypassa RLS en driver_payment_methods,
+-- por lo que anon puede leer métodos a través de la vista sin grant directo.
+-- -----------------------------
+drop view if exists public.public_driver_profiles;
+create view public.public_driver_profiles
+  with (security_invoker = false)
+as
+  select
+    dpp.id,
+    dpp.display_name,
+    dpp.vehicle_info,
+    dpp.route_info,
+    dpp.tip_link_slug,
+    dpp.public_url,
+    dpp.is_active,
+    dpp.is_visible,
+    dpp.payment_provider,
+    dpp.payment_url,
+    dpp.payment_instructions,
+    (
+      select json_agg(
+        json_build_object(
+          'provider',    m.provider,
+          'payment_url', m.payment_url,
+          'instructions', m.instructions,
+          'display_order', m.display_order
+        )
+        order by m.display_order, m.created_at
+      )
+      from public.driver_payment_methods m
+      where m.driver_profile_id = dpp.id
+        and m.is_enabled        = true
+    ) as payment_methods
+  from public.driver_payment_profiles dpp
+  where dpp.is_active  = true
+    and dpp.is_visible = true;
+
+grant select on public.public_driver_profiles to anon;
+grant select on public.public_driver_profiles to authenticated;
+
+-- -----------------------------
+-- Migración de datos Sprint 3A → Sprint 3D
+-- Copia el método legacy (payment_provider/url) a driver_payment_methods.
+-- driver_profile_id = driver_payment_profiles.id (no driver_id de auth.users).
+-- ON CONFLICT DO NOTHING: idempotente, re-ejecutable sin errores.
+-- -----------------------------
+insert into public.driver_payment_methods
+  (driver_profile_id, provider, payment_url, instructions, is_enabled, display_order)
+select
+  dpp.id,
+  dpp.payment_provider,
+  dpp.payment_url,
+  dpp.payment_instructions,
+  true,
+  0
+from public.driver_payment_profiles dpp
+where dpp.payment_provider is not null
+  and dpp.payment_url      is not null
+on conflict (driver_profile_id, provider) do nothing;

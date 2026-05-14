@@ -145,6 +145,14 @@
       <div id="driverSelfContent"></div>
     </section>
 
+    <section id="driverMethodsSection" class="hidden">
+      <div class="section-title driver-self-header">
+        <button id="backFromMethodsBtn" class="btn ghost" type="button">← Volver</button>
+        <h2>🔗 Métodos de pago del conductor</h2>
+      </div>
+      <div id="driverMethodsContent"></div>
+    </section>
+
     <dialog id="editDriverDialog" class="dialog">
       <form id="editDriverForm" class="form compact">
         <h2 id="editDriverTitle">Editar conductor</h2>
@@ -225,6 +233,7 @@
 
         <div class="external-pay-section hidden">
           <p class="payment-instructions help"></p>
+          <div class="payment-methods-list"></div>
           <button class="btn external-pay-btn" type="button">Pagar →</button>
           <p class="payment-provider-notice help">
             🔗 El pago se completa en el proveedor externo. Esta app no procesa ni registra la transacción.
