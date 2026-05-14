@@ -983,3 +983,86 @@ select:focus {
   background: white;
   display: block;
 }
+
+/* ===== Sprint 3H: Diseño profesional y bilingüe ===== */
+
+.tip-tab {
+  padding: 14px 28px;
+  font-size: 16px;
+  min-height: 52px;
+  letter-spacing: -0.3px;
+  box-shadow: 0 4px 14px rgba(244, 197, 66, 0.4);
+  transition: background 0.12s, box-shadow 0.15s, transform 0.15s;
+}
+
+.tip-tab:hover {
+  background: #e8b830;
+  box-shadow: 0 6px 20px rgba(244, 197, 66, 0.55);
+  transform: translateY(-1px);
+}
+
+.lang-toggle {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.lang-btn {
+  border: 1px solid var(--line);
+  background: #fffaf0;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  min-height: 44px;
+  white-space: nowrap;
+  color: var(--text);
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.lang-btn.active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
+.lang-btn:not(.active):hover {
+  border-color: var(--gold);
+}
+
+.tip-trust-notice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  text-align: center;
+  margin: 0 0 16px;
+}
+
+.payment-method-block {
+  padding: 24px 20px;
+  border-width: 2px;
+  border-radius: 24px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.payment-method-block:hover {
+  border-color: var(--gold);
+  box-shadow: 0 4px 16px rgba(244, 197, 66, 0.2);
+}
+
+.payment-method-name {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.2px;
+}
+
+.payment-provider-notice {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+  margin-top: 4px;
+}

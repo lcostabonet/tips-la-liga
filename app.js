@@ -712,6 +712,10 @@ function setupEvents() {
     window.open(payUrl, "_blank", "noopener");
   });
 
+  document.querySelector(".lang-toggle")?.addEventListener("click", (e) => {
+    const btn = e.target.closest(".lang-btn");
+    if (btn?.dataset.lang) setLang(btn.dataset.lang);
+  });
   els.driverSetupBtn.addEventListener("click", showDriverSetupSection);
   els.backFromSetupBtn.addEventListener("click", hideDriverSetupSection);
   $("#cancelSetupBtn").addEventListener("click", hideDriverSetupSection);
@@ -737,6 +741,73 @@ const MOCK_DRIVERS = [
   { id: 3, name: "Sandra R.", emoji: "🚍", bio: "La favorita",        slug: "sandra-r", isMock: true },
   { id: 4, name: "Toni V.",   emoji: "🚎", bio: "El más simpático",   slug: "toni-v",   isMock: true },
 ];
+
+// ===== Sprint 3H: i18n =====
+let currentLang = "es";
+
+const STRINGS = {
+  es: {
+    leaveATip:      "💸 Dar propina",
+    chooseDriver:   "Elige un conductor",
+    directToDriver: "🔒 La propina va directamente al conductor",
+    scanOrTap:      "Escanea el QR o pulsa el botón",
+    tipBtn:         "Dar propina",
+    noDrivers:      "No hay conductores disponibles en este momento.",
+    loading:        "Cargando conductores...",
+    selectAmount:   "Selecciona un importe",
+    payBtnActive:   (a) => `Pagar ${a} €`,
+    anotherTip:     "Dar otra propina",
+    tipSent:        (n) => `¡Propina enviada a ${n}!`,
+    demoNotice:     "🧪 Modo demo — el pago no es real",
+    testNotice:     "🧪 Modo test — el pago es de prueba con Stripe",
+    noMethodNotice: "Sin método de pago configurado aún.",
+    providerNotice: "🔗 El pago se completa en el proveedor externo. Esta app no procesa ni registra la transacción.",
+    payWithPaypal:  "Pagar con PayPal →",
+    payWithRevolut: "Pagar con Revolut →",
+    payWith:        (n) => `Pagar con ${n} →`,
+    processing:     "Procesando...",
+  },
+  en: {
+    leaveATip:      "💸 Leave a tip",
+    chooseDriver:   "Choose a driver",
+    directToDriver: "🔒 Your tip goes directly to the driver",
+    scanOrTap:      "Scan the QR code or tap the button",
+    tipBtn:         "Leave a tip",
+    noDrivers:      "No drivers available right now.",
+    loading:        "Loading drivers...",
+    selectAmount:   "Select an amount",
+    payBtnActive:   (a) => `Pay ${a} €`,
+    anotherTip:     "Leave another tip",
+    tipSent:        (n) => `Tip sent to ${n}!`,
+    demoNotice:     "🧪 Demo mode — payment is not real",
+    testNotice:     "🧪 Test mode — this is a Stripe test payment",
+    noMethodNotice: "No payment method configured yet.",
+    providerNotice: "🔗 Payment is completed on the external provider. This app does not process or record the transaction.",
+    payWithPaypal:  "Pay with PayPal →",
+    payWithRevolut: "Pay with Revolut →",
+    payWith:        (n) => `Pay with ${n} →`,
+    processing:     "Processing...",
+  },
+};
+
+function t(key) {
+  return STRINGS[currentLang][key];
+}
+
+function setLang(lang) {
+  currentLang = lang;
+  document.querySelectorAll(".lang-btn").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.lang === lang);
+  });
+  els.darPropinaBtn.textContent = t("leaveATip");
+  const sectionH2 = document.querySelector("#tipDriverSection h2");
+  if (sectionH2) sectionH2.textContent = t("chooseDriver");
+  if (!els.driverPayView.classList.contains("hidden") && selectedDriver) {
+    showDriverPayView(selectedDriver);
+  } else {
+    renderDriverList();
+  }
+}
 
 const TIP_CHIP_AMOUNTS = [1, 2, 5, 10];
 
@@ -766,7 +837,7 @@ function hideTipSection() {
 }
 
 async function renderDriverList() {
-  els.driverList.innerHTML = "<p class='help' style='padding:16px'>Cargando conductores...</p>";
+  els.driverList.innerHTML = `<p class='help' style='padding:16px'>${t("loading")}</p>`;
   els.driverPayView.classList.add("hidden");
   els.driverList.classList.remove("hidden");
 
@@ -774,7 +845,7 @@ async function renderDriverList() {
   els.driverList.innerHTML = "";
 
   if (!drivers.length) {
-    els.driverList.innerHTML = "<p class='help' style='padding:16px'>No hay conductores disponibles en este momento.</p>";
+    els.driverList.innerHTML = `<p class='help' style='padding:16px'>${t("noDrivers")}</p>`;
     return;
   }
 
@@ -787,7 +858,7 @@ async function renderDriverList() {
       <span class="driver-emoji" aria-hidden="true">${driver.emoji || "🚌"}</span>
       <strong>${escapeHtml(name)}</strong>
       <p class="help">${escapeHtml(bio)}</p>
-      <button class="btn primary" type="button">Dar propina</button>
+      <button class="btn primary" type="button">${t("tipBtn")}</button>
     `;
     const normalized = {
       id: driver.id,
@@ -822,6 +893,9 @@ function showDriverPayView(driver) {
   els.payDriverName.textContent = driverName;
   els.payDriverBio.textContent = driverBio;
 
+  const trustEl = document.getElementById("tipTrustNotice");
+  if (trustEl) trustEl.textContent = driver.isMock ? "" : t("directToDriver");
+
   const methods = !driver.isMock && Array.isArray(driver.payment_methods) && driver.payment_methods.length > 0
     ? driver.payment_methods : null;
   const hasExternalPay = !driver.isMock && (!!methods || !!driver.payment_url);
@@ -830,7 +904,7 @@ function showDriverPayView(driver) {
   const mainQrBox = els.driverPayView.querySelector(".qr-box");
   const mainQrHint = els.driverPayView.querySelector(".qr-hint");
   if (mainQrBox) mainQrBox.classList.remove("hidden");
-  if (mainQrHint) mainQrHint.classList.remove("hidden");
+  if (mainQrHint) { mainQrHint.classList.remove("hidden"); mainQrHint.textContent = t("scanOrTap"); }
 
   if (!methods) {
     const qrData = driver.payment_url
@@ -845,6 +919,8 @@ function showDriverPayView(driver) {
   if (hasExternalPay) {
     if (externalPaySection) {
       externalPaySection.classList.remove("hidden");
+      const providerNoticeEl = externalPaySection.querySelector(".payment-provider-notice");
+      if (providerNoticeEl) providerNoticeEl.textContent = t("providerNotice");
       const instrEl = externalPaySection.querySelector(".payment-instructions");
       const methodsList = externalPaySection.querySelector(".payment-methods-list");
       const legacyBtn = externalPaySection.querySelector(".external-pay-btn");
@@ -881,7 +957,9 @@ function showDriverPayView(driver) {
         if (methodsList) methodsList.innerHTML = "";
         if (legacyBtn) {
           legacyBtn.classList.remove("hidden");
-          legacyBtn.textContent = driver.payment_provider === "paypal" ? "Pagar con PayPal →" : "Pagar →";
+          legacyBtn.textContent = driver.payment_provider === "paypal"
+            ? t("payWithPaypal")
+            : t("payWith")(providerDisplayName(driver.payment_provider) || "");
         }
       }
     }
@@ -896,10 +974,10 @@ function showDriverPayView(driver) {
     if (demoNoticeEl) {
       demoNoticeEl.classList.remove("hidden");
       demoNoticeEl.textContent = driver.isMock
-        ? "🧪 Modo demo — el pago no es real"
+        ? t("demoNotice")
         : (driver.tip_link_slug || driver.slug)
-          ? "🧪 Modo test — el pago es de prueba con Stripe"
-          : "Sin método de pago configurado aún.";
+          ? t("testNotice")
+          : t("noMethodNotice");
     }
     els.customAmount.value = "";
     els.tipChips.innerHTML = "";
@@ -925,10 +1003,10 @@ function showDriverPayView(driver) {
 function updatePayButton() {
   if (selectedTipAmount > 0) {
     els.payTipBtn.disabled = false;
-    els.payTipBtn.textContent = `Pagar ${selectedTipAmount.toFixed(2).replace(".", ",")} €`;
+    els.payTipBtn.textContent = t("payBtnActive")(selectedTipAmount.toFixed(2).replace(".", ","));
   } else {
     els.payTipBtn.disabled = true;
-    els.payTipBtn.textContent = "Selecciona un importe";
+    els.payTipBtn.textContent = t("selectAmount");
   }
 }
 
@@ -936,7 +1014,7 @@ async function handleTipPayment() {
   if (!selectedDriver || selectedTipAmount <= 0) return;
 
   els.payTipBtn.disabled = true;
-  els.payTipBtn.textContent = "Procesando...";
+  els.payTipBtn.textContent = t("processing");
 
   // Stripe aparcado — solo se activa si no hay pago externo configurado
   const slug = selectedDriver.tip_link_slug || selectedDriver.slug;
@@ -961,7 +1039,8 @@ async function handleTipPayment() {
 
   const driverName = selectedDriver.display_name || selectedDriver.name || "el conductor";
   setTimeout(() => {
-    els.confirmMsg.textContent = `¡Propina de ${Number(selectedTipAmount).toFixed(2).replace(".", ",")} € enviada a ${driverName}!`;
+    els.confirmMsg.textContent = t("tipSent")(driverName);
+    els.newTipBtn.textContent = t("anotherTip");
     els.payConfirm.classList.remove("hidden");
     els.payTipBtn.classList.add("hidden");
   }, 1500);
@@ -1148,8 +1227,9 @@ function providerDisplayName(provider) {
 }
 
 function providerLabel(provider) {
-  return { paypal: "Pagar con PayPal →", revolut: "Pagar con Revolut →" }[provider]
-    || `Pagar con ${providerDisplayName(provider)} →`;
+  if (provider === "paypal")  return t("payWithPaypal");
+  if (provider === "revolut") return t("payWithRevolut");
+  return t("payWith")(providerDisplayName(provider));
 }
 
 function providerValidationMsg(provider) {

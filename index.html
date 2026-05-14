@@ -245,7 +245,10 @@
       <div class="tip-driver-header">
         <button id="backToAppBtn" class="btn ghost" type="button">← Volver</button>
         <h2>Elige un conductor</h2>
-        <span class="demo-badge">🧪 Demo</span>
+        <div class="lang-toggle">
+          <button class="lang-btn active" data-lang="es" type="button">ES</button>
+          <button class="lang-btn" data-lang="en" type="button">EN</button>
+        </div>
       </div>
 
       <div id="driverList" class="driver-grid"></div>
@@ -261,11 +264,13 @@
           </div>
         </div>
 
+        <p id="tipTrustNotice" class="tip-trust-notice"></p>
+
         <div class="qr-box">
           <img id="driverQr" src="" alt="QR de pago del conductor" width="180" height="180" loading="lazy" />
         </div>
 
-        <p class="help qr-hint">Escanea el QR o elige un importe</p>
+        <p class="help qr-hint"></p>
 
         <div class="external-pay-section hidden">
           <p class="payment-instructions help"></p>
