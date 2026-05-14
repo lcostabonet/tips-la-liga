@@ -1101,7 +1101,7 @@ select:focus {
   font-size: 13px;
   overflow: hidden;
   text-overflow: ellipsis;
-  cursor: default;
+  cursor: text;
   min-width: 0;
 }
 
@@ -1116,4 +1116,81 @@ select:focus {
   border-radius: 10px;
   border: 2px solid var(--line);
   background: white;
+}
+
+/* ===== Sprint 3J: Imprimir y compartir QR ===== */
+
+.driver-link-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.print-only {
+  display: none;
+}
+
+@media print {
+  body > * {
+    display: none !important;
+  }
+
+  #printPoster {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 0;
+    margin: 0;
+  }
+
+  .poster-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    max-width: 480px;
+    text-align: center;
+    padding: 40px 24px;
+  }
+
+  .poster-brand {
+    font-size: 18px;
+    font-weight: 700;
+    color: #555;
+    margin: 0;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .poster-name {
+    font-size: 32px;
+    font-weight: 900;
+    color: #111;
+    margin: 0;
+    line-height: 1.1;
+  }
+
+  .poster-qr {
+    border: 3px solid #ddd;
+    border-radius: 16px;
+    background: white;
+    padding: 8px;
+  }
+
+  .poster-tagline {
+    font-size: 20px;
+    font-weight: 700;
+    color: #222;
+    margin: 0;
+    line-height: 1.4;
+  }
+
+  .poster-trust {
+    font-size: 14px;
+    color: #666;
+    margin: 0;
+    line-height: 1.6;
+  }
 }

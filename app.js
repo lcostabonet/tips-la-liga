@@ -1394,7 +1394,10 @@ async function showDriverSelfSection() {
     ? `${selfBase}?driver=${encodeURIComponent(p.tip_link_slug)}`
     : null;
   const selfQrSrc = selfPublicUrl
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(selfPublicUrl)}`
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(selfPublicUrl)}`
+    : null;
+  const selfQrDownloadUrl = selfPublicUrl
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=400x400&format=png&data=${encodeURIComponent(selfPublicUrl)}`
     : null;
 
   els.driverSelfContent.innerHTML = `
@@ -1414,10 +1417,18 @@ async function showDriverSelfSection() {
             <button id="selfCopyLinkBtn" class="btn ghost btn-sm" type="button">Copiar</button>
           </div>
           <div class="driver-link-qr">
-            <img src="${selfQrSrc}" alt="QR de tu enlace" width="120" height="120" loading="lazy" />
+            <img id="selfQrImg" src="${selfQrSrc}" alt="QR de tu enlace" width="160" height="160" loading="lazy" />
+            <p id="selfQrError" class="help" style="display:none;margin-top:8px;text-align:center">
+              No se pudo cargar el QR.<br>Usa el botón "Copiar" para compartir tu enlace.
+            </p>
             <p class="help" style="font-size:11px;margin:4px 0 0;text-align:center">
               Comparte este QR para recibir propinas directas
             </p>
+          </div>
+          <div class="driver-link-actions">
+            <button id="selfPrintBtn" class="btn ghost btn-sm" type="button">🖨 Imprimir cartel</button>
+            <button id="selfDownloadQrBtn" class="btn ghost btn-sm" type="button">⬇ Descargar QR</button>
+            ${navigator.share ? `<button id="selfShareBtn" class="btn ghost btn-sm" type="button">↗ Compartir enlace</button>` : ""}
           </div>
         </div>
       ` : `
@@ -1458,6 +1469,62 @@ async function showDriverSelfSection() {
       }
     });
   }
+
+  // Fallback si el QR no carga (red corporativa, etc.)
+  const selfQrImg = document.getElementById("selfQrImg");
+  if (selfQrImg) {
+    selfQrImg.addEventListener("error", () => {
+      selfQrImg.style.display = "none";
+      const errEl = document.getElementById("selfQrError");
+      if (errEl) errEl.style.display = "block";
+    });
+  }
+
+  // Imprimir cartel
+  document.getElementById("selfPrintBtn")?.addEventListener("click", () => {
+    const posterName = document.getElementById("posterName");
+    const posterQr   = document.getElementById("posterQr");
+    if (posterName) posterName.textContent = p.display_name;
+    if (posterQr) {
+      posterQr.onload  = () => window.print();
+      posterQr.onerror = () => toast("No se pudo cargar el QR del cartel. Usa el botón 'Copiar' para compartir tu enlace.");
+      posterQr.src = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(selfPublicUrl)}`;
+      if (posterQr.complete) window.print();
+    } else {
+      window.print();
+    }
+  });
+
+  // Descargar QR
+  document.getElementById("selfDownloadQrBtn")?.addEventListener("click", async () => {
+    try {
+      const res  = await fetch(selfQrDownloadUrl);
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href     = url;
+      a.download = `qr-${p.tip_link_slug || p.display_name.replace(/\s+/g, "-")}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast("No se pudo descargar el QR. Usa el botón 'Copiar' para compartir tu enlace.");
+      window.open(selfQrDownloadUrl, "_blank", "noopener");
+    }
+  });
+
+  // Compartir (solo si navigator.share está disponible)
+  document.getElementById("selfShareBtn")?.addEventListener("click", async () => {
+    try {
+      await navigator.share({
+        title: `Propina para ${p.display_name} · Tips La Liga`,
+        text:  `Deja una propina directamente a ${p.display_name}`,
+        url:   selfPublicUrl,
+      });
+    } catch {
+      // El usuario canceló o el navegador rechazó — no hacer nada
+    }
+  });
+
   document.getElementById("selfVisibleToggle").addEventListener("change", async (e) => {
     if (!currentUser) return;
     const { error } = await client
