@@ -101,6 +101,13 @@ const els = {
   editQrPreview: $("#editQrPreview"),
   editQrPreviewImg: $("#editQrPreviewImg"),
   editProviderBadge: $("#editProviderBadge"),
+  driverSetupBtn:     $("#driverSetupBtn"),
+  driverSetupSection: $("#driverSetupSection"),
+  backFromSetupBtn:   $("#backFromSetupBtn"),
+  driverSetupForm:    $("#driverSetupForm"),
+  setupDisplayName:   $("#setupDisplayName"),
+  setupVehicleInfo:   $("#setupVehicleInfo"),
+  setupRouteInfo:     $("#setupRouteInfo"),
   driverLinkBtn: $("#driverLinkBtn"),
   driverSelfSection: $("#driverSelfSection"),
   backFromSelfBtn: $("#backFromSelfBtn"),
@@ -611,6 +618,7 @@ async function onAuthStateChanged(session) {
   els.adminDriversSection.classList.add("hidden");
   els.driverSelfSection.classList.add("hidden");
   els.driverMethodsSection.classList.add("hidden");
+  els.driverSetupSection.classList.add("hidden");
   currentUser = session?.user || null;
 
   if (!currentUser) {
@@ -623,6 +631,7 @@ async function onAuthStateChanged(session) {
     els.userBox.classList.add("hidden");
     els.adminBtn.classList.add("hidden");
     els.driverLinkBtn.classList.add("hidden");
+    els.driverSetupBtn.classList.add("hidden");
     return;
   }
 
@@ -635,7 +644,11 @@ async function onAuthStateChanged(session) {
     if (isAdmin()) els.adminBtn.classList.remove("hidden");
     await loadTips();
     await loadDriverSelfProfile();
-    if (driverSelfProfile) els.driverLinkBtn.classList.remove("hidden");
+    if (driverSelfProfile) {
+      els.driverLinkBtn.classList.remove("hidden");
+    } else {
+      els.driverSetupBtn.classList.remove("hidden");
+    }
   } catch (error) {
     toast(error.message || "Error cargando datos.");
   }
@@ -699,6 +712,10 @@ function setupEvents() {
     window.open(payUrl, "_blank", "noopener");
   });
 
+  els.driverSetupBtn.addEventListener("click", showDriverSetupSection);
+  els.backFromSetupBtn.addEventListener("click", hideDriverSetupSection);
+  $("#cancelSetupBtn").addEventListener("click", hideDriverSetupSection);
+  els.driverSetupForm.addEventListener("submit", saveDriverProfile);
   els.driverLinkBtn.addEventListener("click", showDriverSelfSection);
   els.backFromSelfBtn.addEventListener("click", hideDriverSelfSection);
   els.backFromMethodsBtn.addEventListener("click", hideDriverMethodsSection);
@@ -729,6 +746,7 @@ function showTipSection() {
   els.adminDriversSection.classList.add("hidden");
   els.driverSelfSection.classList.add("hidden");
   els.driverMethodsSection.classList.add("hidden");
+  els.driverSetupSection.classList.add("hidden");
   els.tipDriverSection.classList.remove("hidden");
   renderDriverList();
 }
@@ -1232,6 +1250,7 @@ function showAdminSection() {
   els.tipDriverSection.classList.add("hidden");
   els.driverSelfSection.classList.add("hidden");
   els.driverMethodsSection.classList.add("hidden");
+  els.driverSetupSection.classList.add("hidden");
   els.adminDriversSection.classList.remove("hidden");
   loadDriverProfiles().then(renderDriverProfiles).catch((err) => toast(err.message || "Error cargando conductores."));
 }
@@ -1264,6 +1283,7 @@ async function showDriverSelfSection() {
   els.tipDriverSection.classList.add("hidden");
   els.adminDriversSection.classList.add("hidden");
   els.driverMethodsSection.classList.add("hidden");
+  els.driverSetupSection.classList.add("hidden");
   els.driverSelfSection.classList.remove("hidden");
 
   const p = driverSelfProfile;
@@ -1390,6 +1410,57 @@ async function saveDriverSelfProfile(event) {
     toast("Enlace guardado.");
   } catch (err) {
     toast(err.message || "Error al guardar.");
+  }
+}
+
+function showDriverSetupSection() {
+  if (!currentUser) return;
+  els.authSection.classList.add("hidden");
+  els.appSection.classList.add("hidden");
+  els.tipDriverSection.classList.add("hidden");
+  els.adminDriversSection.classList.add("hidden");
+  els.driverSelfSection.classList.add("hidden");
+  els.driverMethodsSection.classList.add("hidden");
+  els.driverSetupSection.classList.remove("hidden");
+
+  els.setupDisplayName.value = currentProfile?.display_name || "";
+  els.setupVehicleInfo.value = "";
+  els.setupRouteInfo.value = "";
+}
+
+function hideDriverSetupSection() {
+  els.driverSetupSection.classList.add("hidden");
+  if (currentUser) els.appSection.classList.remove("hidden");
+  else els.authSection.classList.remove("hidden");
+}
+
+async function saveDriverProfile(event) {
+  event.preventDefault();
+  if (!currentUser) return;
+
+  const displayName = els.setupDisplayName.value.trim();
+  if (!displayName) { toast("El nombre público es obligatorio."); return; }
+
+  try {
+    const { error } = await client
+      .from("driver_payment_profiles")
+      .insert({
+        driver_id:    currentUser.id,
+        display_name: displayName,
+        vehicle_info: els.setupVehicleInfo.value.trim() || null,
+        route_info:   els.setupRouteInfo.value.trim() || null,
+        is_active:    true,
+        is_visible:   false,
+      });
+    if (error) throw error;
+
+    await loadDriverSelfProfile();
+    els.driverSetupBtn.classList.add("hidden");
+    els.driverLinkBtn.classList.remove("hidden");
+    toast("Perfil creado. Ahora añade tu método de pago.");
+    showDriverSelfSection();
+  } catch (err) {
+    toast(err.message || "Error al crear el perfil.");
   }
 }
 
@@ -1614,6 +1685,7 @@ async function showDriverMethodsSection(driverDataset) {
   els.tipDriverSection.classList.add("hidden");
   els.adminDriversSection.classList.add("hidden");
   els.driverSelfSection.classList.add("hidden");
+  els.driverSetupSection.classList.add("hidden");
   els.driverMethodsSection.classList.remove("hidden");
 
   els.driverMethodsContent.innerHTML = "<p class='help'>Cargando...</p>";
