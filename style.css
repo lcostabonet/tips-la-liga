@@ -958,3 +958,28 @@ select:focus {
   font-size: 12px;
   padding: 6px 10px;
 }
+
+.payment-method-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: #fffdf9;
+  margin-bottom: 12px;
+}
+
+.payment-method-name {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.payment-method-qr img {
+  border-radius: 12px;
+  border: 2px solid var(--line);
+  background: white;
+  display: block;
+}

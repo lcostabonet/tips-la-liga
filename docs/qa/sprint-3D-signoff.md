@@ -196,3 +196,24 @@ Los 10 checks de re-revisión pasan. BUG-01 y BUG-02 resueltos con una línea ca
 Pendiente operacional (no bloqueante para el código): ejecutar el bloque Sprint 3D de `supabase.sql` en el SQL Editor de Supabase para crear la tabla `driver_payment_methods` y la migración de datos. Hasta entonces, `payment_methods` devuelve `null` en la vista y la app usa el flujo legacy Sprint 3A.
 
 Sprint 3D listo para avanzar a Sprint 3E.
+
+---
+
+## Re-revisión: mejora visual multi-método en "Dar propina" (2026-05-14)
+
+**Cambio revisado:** `showDriverPayView()` reemplaza los botones apilados en una lista por bloques individuales por método, cada uno con nombre, QR propio, botón de pago e instrucciones.
+
+| Check | Resultado | Evidencia |
+|---|---|---|
+| Dos bloques con PayPal + Revolut | ✅ | Bucle `for (const m of methods)` crea un `.payment-method-block` por método |
+| QR propio por bloque | ✅ | `qrSrc = qrserver...encodeURIComponent(m.payment_url)` — `m` de cada iteración |
+| Botón abre su `payment_url` | ✅ | Cierre sobre `m.payment_url` en `for...of` — valor correcto por iteración |
+| Instrucciones propias por método | ✅ | `m.instructions` — variable de la iteración, no compartida |
+| Un solo método sigue funcionando | ✅ | Bucle corre una vez; flujo legacy (mainQrBox restaurado al inicio) intacto |
+| Sin PayPal API / Revolut API | ✅ | Solo `window.open()` y `api.qrserver.com` (QR público) |
+| `supabase.sql` no modificado | ✅ | `git diff HEAD -- supabase.sql supabase/functions/` → 0 líneas |
+| Edge Functions no modificadas | ✅ | Ídem |
+| Vista móvil | ✅ | `flex-direction: column`, QR 160×160 cabe en 375px |
+| XSS seguro | ✅ | `m.provider`, instrucciones y labels pasados por `escapeHtml()` |
+
+**APROBADO ✅** — cambio visual correcto, sin regresiones.

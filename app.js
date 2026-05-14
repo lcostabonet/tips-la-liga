@@ -807,10 +807,19 @@ function showDriverPayView(driver) {
   const methods = !driver.isMock && Array.isArray(driver.payment_methods) && driver.payment_methods.length > 0
     ? driver.payment_methods : null;
   const hasExternalPay = !driver.isMock && (!!methods || !!driver.payment_url);
-  const qrData = methods
-    ? methods[0].payment_url
-    : (driver.payment_url || driver.public_url || `tips-la-liga-demo-${driver.tip_link_slug || driver.slug || "demo"}`);
-  els.driverQr.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrData)}`;
+
+  // QR central: solo para flujo legacy (un único método). Para multi-método se oculta.
+  const mainQrBox = els.driverPayView.querySelector(".qr-box");
+  const mainQrHint = els.driverPayView.querySelector(".qr-hint");
+  if (mainQrBox) mainQrBox.classList.remove("hidden");
+  if (mainQrHint) mainQrHint.classList.remove("hidden");
+
+  if (!methods) {
+    const qrData = driver.payment_url
+      || driver.public_url
+      || `tips-la-liga-demo-${driver.tip_link_slug || driver.slug || "demo"}`;
+    els.driverQr.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrData)}`;
+  }
 
   const externalPaySection = els.driverPayView.querySelector(".external-pay-section");
   const demoNoticeEl = els.driverPayView.querySelector(".demo-notice");
@@ -823,22 +832,29 @@ function showDriverPayView(driver) {
       const legacyBtn = externalPaySection.querySelector(".external-pay-btn");
 
       if (methods) {
-        // Flujo Sprint 3D: multi-método
-        if (instrEl) instrEl.textContent = methods[0].instructions || "";
+        // Flujo Sprint 3D: un bloque por método con QR propio
+        if (mainQrBox) mainQrBox.classList.add("hidden");
+        if (mainQrHint) mainQrHint.classList.add("hidden");
+        if (instrEl) instrEl.textContent = "";
         if (legacyBtn) legacyBtn.classList.add("hidden");
         if (methodsList) {
           methodsList.innerHTML = "";
           for (const m of methods) {
-            const btn = document.createElement("button");
-            btn.type = "button";
-            btn.className = `btn payment-method-btn ${m.provider}`;
-            btn.textContent = providerLabel(m.provider);
-            btn.addEventListener("click", () => {
-              els.driverQr.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(m.payment_url)}`;
-              if (instrEl) instrEl.textContent = m.instructions || "";
+            const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(m.payment_url)}`;
+            const block = document.createElement("div");
+            block.className = "payment-method-block";
+            block.innerHTML = `
+              <p class="payment-method-name">${escapeHtml(providerDisplayName(m.provider))}</p>
+              <div class="payment-method-qr">
+                <img src="${qrSrc}" alt="QR ${escapeHtml(providerDisplayName(m.provider))}" width="160" height="160" loading="lazy" />
+              </div>
+              <button class="btn payment-method-btn ${escapeHtml(m.provider)}" type="button">${escapeHtml(providerLabel(m.provider))}</button>
+              ${m.instructions ? `<p class="payment-instructions help">${escapeHtml(m.instructions)}</p>` : ""}
+            `;
+            block.querySelector("button").addEventListener("click", () => {
               window.open(m.payment_url, "_blank", "noopener");
             });
-            methodsList.appendChild(btn);
+            methodsList.appendChild(block);
           }
         }
       } else {
