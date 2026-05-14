@@ -899,7 +899,7 @@ function showDriverPayView(driver) {
         ? "🧪 Modo demo — el pago no es real"
         : (driver.tip_link_slug || driver.slug)
           ? "🧪 Modo test — el pago es de prueba con Stripe"
-          : "Este conductor aún no tiene método de pago configurado.";
+          : "Sin método de pago configurado aún.";
     }
     els.customAmount.value = "";
     els.tipChips.innerHTML = "";
@@ -940,7 +940,7 @@ async function handleTipPayment() {
 
   // Stripe aparcado — solo se activa si no hay pago externo configurado
   const slug = selectedDriver.tip_link_slug || selectedDriver.slug;
-  if (slug && client && !selectedDriver.isMock && !selectedDriver.payment_url) {
+  if (slug && client && !selectedDriver.isMock && !selectedDriver.payment_url && !selectedDriver.payment_methods?.length) {
     try {
       const result = await callEdgeFunction(
         "create-driver-payment-link",
@@ -1266,7 +1266,7 @@ async function loadDriverSelfProfile() {
   try {
     const { data, error } = await client
       .from("driver_payment_profiles")
-      .select("id, driver_id, display_name, payment_provider, payment_url, payment_instructions, is_visible")
+      .select("id, driver_id, display_name, is_visible")
       .eq("driver_id", currentUser.id)
       .maybeSingle();
     if (error) throw error;
@@ -1278,6 +1278,7 @@ async function loadDriverSelfProfile() {
 
 async function showDriverSelfSection() {
   if (!currentUser) return;
+  if (!driverSelfProfile) return;
   els.authSection.classList.add("hidden");
   els.appSection.classList.add("hidden");
   els.tipDriverSection.classList.add("hidden");
@@ -1327,90 +1328,6 @@ function hideDriverSelfSection() {
   els.driverSelfSection.classList.add("hidden");
   if (currentUser) els.appSection.classList.remove("hidden");
   else els.authSection.classList.remove("hidden");
-}
-
-let selfQrPreviewTimer = null;
-
-function updateSelfUrlPreview() {
-  const providerEl = document.getElementById("selfPaymentProvider");
-  const urlEl = document.getElementById("selfPaymentUrl");
-  const hintEl = document.getElementById("selfUrlValidationHint");
-  const testBtn = document.getElementById("selfTestLinkBtn");
-  const badgeEl = document.getElementById("selfProviderBadge");
-  const qrBox = document.getElementById("selfQrPreview");
-  const qrImg = document.getElementById("selfQrPreviewImg");
-
-  if (!providerEl || !urlEl) return;
-
-  const provider = providerEl.value;
-  const url = urlEl.value.trim();
-  const valid = isValidPaymentUrl(provider, url);
-
-  hintEl.className = "url-validation-hint";
-  if (valid === null) {
-    hintEl.textContent = "";
-  } else if (valid) {
-    hintEl.classList.add("url-valid");
-    hintEl.textContent = "✓ Enlace válido";
-  } else {
-    hintEl.classList.add("url-invalid");
-    hintEl.textContent = providerValidationMsg(provider);
-  }
-
-  testBtn.disabled = !url || valid === false;
-
-  if (provider) {
-    badgeEl.textContent = providerDisplayName(provider);
-    badgeEl.className = `payment-badge payment-${provider}`;
-    badgeEl.classList.remove("hidden");
-  } else {
-    badgeEl.classList.add("hidden");
-  }
-
-  clearTimeout(selfQrPreviewTimer);
-  if (url && valid !== false) {
-    selfQrPreviewTimer = setTimeout(() => {
-      qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(url)}`;
-      qrBox.classList.remove("hidden");
-    }, 500);
-  } else {
-    qrBox.classList.add("hidden");
-    qrImg.src = "";
-  }
-}
-
-async function saveDriverSelfProfile(event) {
-  event.preventDefault();
-  if (!currentUser) return;
-  const paymentProvider = document.getElementById("selfPaymentProvider").value || null;
-  const paymentUrl = document.getElementById("selfPaymentUrl").value.trim() || null;
-
-  if (paymentProvider === "paypal" && paymentUrl) {
-    if (!isValidPaymentUrl(paymentProvider, paymentUrl)) {
-      toast("El enlace de PayPal debe empezar por https://paypal.me/ o https://www.paypal.com/");
-      return;
-    }
-  }
-
-  const updates = {
-    payment_provider: paymentProvider,
-    payment_url: paymentUrl,
-    payment_instructions: document.getElementById("selfPaymentInstructions").value.trim() || null,
-    is_visible: document.getElementById("selfDriverVisible").checked,
-  };
-
-  try {
-    const { error } = await client
-      .from("driver_payment_profiles")
-      .update(updates)
-      .eq("driver_id", currentUser.id);
-    if (error) throw error;
-    driverSelfProfile = { ...driverSelfProfile, ...updates };
-    hideDriverSelfSection();
-    toast("Enlace guardado.");
-  } catch (err) {
-    toast(err.message || "Error al guardar.");
-  }
 }
 
 function showDriverSetupSection() {
@@ -1508,7 +1425,7 @@ function renderMethodList(methods, container, driverId, driverName) {
   container.innerHTML = "";
 
   if (!methods.length) {
-    container.innerHTML = "<p class='help' style='margin-bottom:12px'>Sin métodos configurados.</p>";
+    container.innerHTML = `<p class='help' style='margin-bottom:12px'>Sin métodos de pago configurados.<br>Añade PayPal o Revolut para aparecer en "Dar propina".</p>`;
   }
 
   for (const m of methods) {
